@@ -10,6 +10,12 @@ import (
 
 // 注解的中间格式
 
+// ExtraRelateVar 额外关联的变量信息，来自其他文件中 ---@type ClassName 注解的变量
+type ExtraRelateVar struct {
+	Var     *VarInfo // 关联的变量
+	LuaFile string   // 变量所在的lua文件名
+}
+
 // OneClassInfo 定义的一个Class信息
 type OneClassInfo struct {
 	LastLine   int                                        // 这块class所在定义的最后行数
@@ -23,6 +29,10 @@ type OneClassInfo struct {
 	//b.a = 1
 	//这里是关联的第一轮遍历的变量指针，默认为nil
 	RelateVar *VarInfo
+
+	// 额外关联的变量列表，来自其他文件中用 ---@type ClassName 注解的变量
+	// 这些变量上定义的子成员（方法、字段）也属于这个class
+	ExtraRelateVarList []ExtraRelateVar
 
 	LuaFile string // 这个结构所在的lua文件名
 }
@@ -803,6 +813,78 @@ func (af *AnnotateFile) relateVarBeforeFragementType(varInfo *VarInfo, fragmentI
 	}
 
 	return false
+}
+
+// CollectExtraRelateVars 收集跨文件的 ---@type ClassName 关联变量
+// 当文件B中有 ---@type ClassName 修饰的变量，且 ClassName 定义在其他文件中时，
+// 将该变量添加到对应 OneClassInfo 的 ExtraRelateVarList 中
+func (af *AnnotateFile) CollectExtraRelateVars(globalCreateTypeMap map[string]CreateTypeList,
+	globalMaps map[string]*VarInfo, mainScope *ScopeInfo) {
+
+	// 收集所有变量
+	resultVar := resultSortVar{
+		results: []*VarInfo{},
+	}
+	for _, varInfo := range globalMaps {
+		resultVar.results = append(resultVar.results, varInfo)
+		pushSubMapVars(varInfo, &(resultVar.results))
+	}
+	mainScope.GetAllVarInfos(&(resultVar.results))
+
+	sort.Sort(&resultVar)
+
+	for _, varInfo := range resultVar.results {
+		// 变量没有子成员，跳过
+		if len(varInfo.SubMaps) == 0 {
+			continue
+		}
+
+		lastLine := varInfo.Loc.StartLine - 1
+		fragmentInfo, ok := af.FragementMap[lastLine]
+		if !ok {
+			continue
+		}
+
+		if fragmentInfo.TypeInfo == nil {
+			continue
+		}
+
+		for index, astType := range fragmentInfo.TypeInfo.TypeList {
+			varIndex := (int)(varInfo.VarIndex)
+			if (index + 1) != varIndex {
+				continue
+			}
+
+			strName := annotateast.TraverseOneType(astType)
+			if strName == "" {
+				break
+			}
+
+			// 如果本文件已经有这个class定义，说明 relateVarBeforeFragementType 已经处理过了
+			if _, localOk := af.CreateTypeMap[strName]; localOk {
+				break
+			}
+
+			// 在全局 createTypeMap 中查找这个class
+			globalTypeList, globalOk := globalCreateTypeMap[strName]
+			if !globalOk || len(globalTypeList.List) == 0 {
+				break
+			}
+
+			// 找到对应的 ClassInfo，将变量添加到 ExtraRelateVarList
+			for _, oneCreate := range globalTypeList.List {
+				if oneCreate.ClassInfo != nil {
+					classInfo := oneCreate.ClassInfo
+					classInfo.ExtraRelateVarList = append(classInfo.ExtraRelateVarList, ExtraRelateVar{
+						Var:     varInfo,
+						LuaFile: af.LuaFile,
+					})
+					break
+				}
+			}
+			break
+		}
+	}
 }
 
 // RelateTypeVarInfo 这个文件新产生的符号，关联到第一阶段中的变量信息

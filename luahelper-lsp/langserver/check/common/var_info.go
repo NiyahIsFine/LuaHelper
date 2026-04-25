@@ -108,6 +108,7 @@ type VarInfo struct {
 	IsExpEmpty      bool                // 默认为false，指向的ReferExp是否为empty，例如定义的时候 a = nil， 那么IsExpEmpty为true, 当被赋值后，就不为true
 	IsMemFlag       bool                // 是否为其他的变量的成员变量，默认为false
 	IsClose         bool                // 是否为lua5.4 close熟悉的变量
+	DefineFuncLv    int                 // 定义时所在的函数层级，0表示文件顶层
 }
 
 // VarGetFlag 变量信息获取的方式

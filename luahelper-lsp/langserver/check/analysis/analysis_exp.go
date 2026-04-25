@@ -116,6 +116,13 @@ func (a *Analysis) cgFuncDefExp(node *ast.FuncDefExp) *common.FuncInfo {
 		locVar.IsParam = true
 		locVar.IsUse = true
 
+		// 第五轮，对函数参数声明处着色
+		// 跳过冒号方法自动注入的self参数，因为其位置与方法名重叠
+		if a.isFiveTerm() && !(node.IsColon && index == 0) {
+			paramLoc := node.ParLocList[index]
+			a.ColorResult.InsertOneColorElem(common.CTParam, &paramLoc)
+		}
+
 		// 函数所有的参数放入数组进去，函数代码提示的时候有用
 		subFi.ParamList = append(subFi.ParamList, param)
 	}
@@ -349,8 +356,16 @@ func (a *Analysis) cgFuncCallExp(node *ast.FuncCallExp) *common.ReferInfo {
 	// 在第二阶段，里面可能深度加载依赖的文件
 	newRefer := a.GetImportRefer(node)
 
+	// 第五轮，标记函数调用上下文，让 findTableDefine 区分成员函数和成员变量
+	if a.isFiveTerm() && node.NameExp == nil {
+		a.colorFuncContext = true
+	}
+
 	//nArgs := len(node.Args)
 	a.cgExp(node.PrefixExp, nil, nil)
+
+	// 重置标记
+	a.colorFuncContext = false
 
 	if node.NameExp != nil {
 		//analysis.cgExp(node.ast.NameExp)
@@ -375,7 +390,13 @@ func (a *Analysis) cgFuncCallExp(node *ast.FuncCallExp) *common.ReferInfo {
 // r[a] := prefix[key]
 // binParentExp 为二元表达式，父的BinopExp指针， 例如 a = b and c，当对c变量调用cgExp时候，binParentExp为b and c
 func (a *Analysis) cgTableAccessExp(node *ast.TableAccessExp, binParentExp *ast.BinopExp) {
+	// 第五轮，处理prefix时暂时清除函数上下文标记，避免prefix被错误着色
+	// 例如 XX.fun() 中 XX 不应该被标记为函数颜色，只有 fun 才是
+	savedFuncContext := a.colorFuncContext
+	a.colorFuncContext = false
 	a.cgExp(node.PrefixExp, nil, nil)
+	a.colorFuncContext = savedFuncContext
+
 	a.cgExp(node.KeyExp, nil, nil)
 
 	if a.isFirstTerm() {

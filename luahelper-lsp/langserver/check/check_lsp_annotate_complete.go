@@ -339,6 +339,11 @@ func (a *AllProject) convertClassInfoToCompleteVecs(oneClass *common.OneClassInf
 	if oneClass.RelateVar != nil {
 		a.getVarCompleteExt(oneClass.LuaFile, oneClass.RelateVar, colonFlag)
 	}
+
+	// 3) 跨文件 ---@type ClassName 关联的变量
+	for _, extraVar := range oneClass.ExtraRelateVarList {
+		a.getVarCompleteExt(extraVar.LuaFile, extraVar.Var, colonFlag)
+	}
 }
 
 // getVarInfoCompleteExt 获取变量关联的所有子成员信息，用于代码补全

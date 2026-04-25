@@ -729,7 +729,7 @@ func getFinalStrComment(strComment string, beforeEmptyLine bool) string {
 	for index, oneStr := range splitStrArr {
 		oneStr = strings.TrimPrefix(oneStr, "-*")
 		oneStr = strings.TrimPrefix(oneStr, "*")
-		oneStr = strings.TrimPrefix(oneStr, "-")
+		oneStr = strings.TrimLeft(oneStr, "-")
 		oneStr = strings.TrimLeft(oneStr, " ")
 		splitStrArr[index] = oneStr
 

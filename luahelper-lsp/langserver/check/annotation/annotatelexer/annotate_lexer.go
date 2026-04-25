@@ -53,25 +53,29 @@ func CreateAnnotateLexer(chunk *string, line, col int) *AnnotateLexer {
 	}
 }
 
-// CheckAliasHeadValid 检验是否为换行的alias头部，以-|开头
+// CheckAliasHeadValid 检验是否为换行的alias头部，以-|开头（支持多个-，如--|、---|等）
 func (l *AnnotateLexer) CheckAliasHeadValid() bool {
-	// 判断这行内容是否以-|开头
-	if l.test("-|") {
-		l.next(2)
+	i := 0
+	for i < len(l.chunk) && l.chunk[i] == '-' {
+		i++
+	}
+	if i > 0 && i < len(l.chunk) && l.chunk[i] == '|' {
+		l.next(i + 1)
 		return true
 	}
-
 	return false
 }
 
-// CheckHeardValid 校验头部是否有效，正常头部只能以-@开头
+// CheckHeardValid 校验头部是否有效，正常头部只能以-@开头（支持多个-，如--@、---@等）
 func (l *AnnotateLexer) CheckHeardValid() bool {
-	// 判断这行内容是否以-@开头
-	if l.test("-@") {
-		l.next(2)
+	i := 0
+	for i < len(l.chunk) && l.chunk[i] == '-' {
+		i++
+	}
+	if i > 0 && i < len(l.chunk) && l.chunk[i] == '@' {
+		l.next(i + 1)
 		return true
 	}
-
 	return false
 }
 

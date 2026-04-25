@@ -44,7 +44,16 @@ func (a *Analysis) cgStat(node ast.Stat) {
 func (a *Analysis) cgFuncCallStat(node *ast.FuncCallStat) {
 	// 在第二阶段，里面可能深度加载依赖的文件，直接函数调用例如import("one.two")
 	a.GetImportReferByCallExp(node)
+
+	// 第五轮，标记函数调用上下文
+	if a.isFiveTerm() && node.NameExp == nil {
+		a.colorFuncContext = true
+	}
+
 	a.cgExp(node.PrefixExp, nil, nil)
+
+	// 重置标记
+	a.colorFuncContext = false
 
 	if node.NameExp != nil {
 		//analysis.cgExp(node.NameExp)
@@ -330,6 +339,14 @@ func (a *Analysis) cgForNumStat(node *ast.ForNumStat) {
 
 	locVar := subScope.AddLocVar(a.curResult.Name, node.VarName, common.LuaTypeInter, nil, node.VarLoc, 1)
 	locVar.IsUse = true
+	locVar.DefineFuncLv = a.curFunc.FuncLv
+	if a.isFiveTerm() {
+		if a.curFunc.FuncLv == 0 {
+			a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &node.VarLoc)
+		} else {
+			a.ColorResult.InsertOneColorElem(common.CTLocalVar, &node.VarLoc)
+		}
+	}
 
 	a.cgBlock(node.Block)
 	a.exitScope()
@@ -392,10 +409,21 @@ func (a *Analysis) cgForInStat(node *ast.ForInStat) {
 		locVar := subScope.AddLocVar(a.curResult.Name, name, common.LuaTypeRefer, nil, node.NameLocList[index], varIndex)
 		locVar.IsForParam = true
 		locVar.IsUse = true
+		locVar.DefineFuncLv = a.curFunc.FuncLv
 		if referExp != nil {
 			locVar.ForCycle = &common.ForCycleInfo{
 				Exp:        referExp,
 				IpairsFlag: ipairsFlag,
+			}
+		}
+
+		// 第五轮，对for-in循环变量声明处着色
+		if a.isFiveTerm() {
+			nameLoc := node.NameLocList[index]
+			if a.curFunc.FuncLv == 0 {
+			a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &nameLoc)
+			} else {
+				a.ColorResult.InsertOneColorElem(common.CTLocalVar, &nameLoc)
 			}
 		}
 	}
@@ -449,6 +477,16 @@ func (a *Analysis) cgGotoStat(node *ast.GotoStat) {
 func (a *Analysis) cgLocalFuncDefStat(node *ast.LocalFuncDefStat) {
 	scope := a.curScope
 	locVar := scope.AddLocVar(a.curResult.Name, node.Name, common.LuaTypeFunc, node.Exp, node.NameLoc, 1)
+	locVar.DefineFuncLv = a.curFunc.FuncLv
+
+	// 第五轮，对local function声明处着色
+	if a.isFiveTerm() {
+		if a.curFunc.FuncLv == 0 {
+			a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &node.NameLoc)
+		} else {
+			a.ColorResult.InsertOneColorElem(common.CTLocalVar, &node.NameLoc)
+		}
+	}
 
 	subFi := a.cgFuncDefExp(node.Exp)
 	locVar.ReferFunc = subFi
@@ -502,9 +540,19 @@ func (a *Analysis) cgLocalVarDeclStat(node *ast.LocalVarDeclStat) {
 
 		nowLoc := node.VarLocList[i]
 		varInfo := scope.AddLocVar(a.curResult.Name, strName, common.GetExpType(exp), exp, nowLoc, varIndex)
+		varInfo.DefineFuncLv = a.curFunc.FuncLv
 		oneAttr := node.AttrList[i]
 		if oneAttr == ast.RDKTOCLOSE {
 			varInfo.IsClose = true
+		}
+
+		// 第五轮，对local变量声明处着色
+		if a.isFiveTerm() {
+			if a.curFunc.FuncLv == 0 {
+				a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &nowLoc)
+			} else {
+				a.ColorResult.InsertOneColorElem(common.CTLocalVar, &nowLoc)
+			}
 		}
 
 		switch exp.(type) {
@@ -541,8 +589,19 @@ func (a *Analysis) cgLocalVarDeclStat(node *ast.LocalVarDeclStat) {
 		varIndex := uint8(i + 1)
 		nowLoc := node.VarLocList[i]
 		oneAttr := node.AttrList[i]
+
+		// 第五轮，对local变量声明处着色（无匹配表达式的变量）
+		if a.isFiveTerm() {
+			if a.curFunc.FuncLv == 0 {
+			a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &nowLoc)
+			} else {
+				a.ColorResult.InsertOneColorElem(common.CTLocalVar, &nowLoc)
+			}
+		}
+
 		if lastExpFuncFlag {
 			locVar := scope.AddLocVar(a.curResult.Name, node.NameList[i], common.LuaTypeRefer, nil, nowLoc, varIndex)
+			locVar.DefineFuncLv = a.curFunc.FuncLv
 			if oneAttr == ast.RDKTOCLOSE {
 				locVar.IsClose = true
 			}
@@ -550,6 +609,7 @@ func (a *Analysis) cgLocalVarDeclStat(node *ast.LocalVarDeclStat) {
 			locVar.ReferExp = node.ExpList[nExps-1]
 		} else {
 			locVar := scope.AddLocVar(a.curResult.Name, node.NameList[i], common.LuaTypeNil, nil, nowLoc, varIndex)
+			locVar.DefineFuncLv = a.curFunc.FuncLv
 			if oneAttr == ast.RDKTOCLOSE {
 				locVar.IsClose = true
 			}
@@ -961,8 +1021,18 @@ func (a *Analysis) cgAssignStat(node *ast.AssignStat) {
 			}
 
 			if taExp, ok := valExp.(*ast.TableAccessExp); ok {
+				// 第五轮，如果右边是函数定义，设置函数上下文标记
+				if a.isFiveTerm() && nExps >= (i+1) {
+					if _, isFuncDef := node.ExpList[i].(*ast.FuncDefExp); isFuncDef {
+						a.colorFuncContext = true
+					}
+				}
+
 				// 第四轮，table的关键key值的赋值，查找引用, 定义出需要去重
 				a.findTableDefine(taExp)
+
+				// 重置标记
+				a.colorFuncContext = false
 			}
 		}
 

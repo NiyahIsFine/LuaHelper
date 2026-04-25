@@ -273,7 +273,11 @@ func (a *Analysis) findGlobalVar(strName string, loc lexer.Location, strProPre s
 			return
 		}
 
-		a.ColorResult.InsertOneColorElem(common.CTGlobalVar, &loc)
+		if a.colorFuncContext {
+			a.ColorResult.InsertOneColorElem(common.CTGlobalFunc, &loc)
+		} else {
+			a.ColorResult.InsertOneColorElem(common.CTGlobalVar, &loc)
+		}
 		return
 	}
 
@@ -458,13 +462,29 @@ func (a *Analysis) findNameStr(node *ast.NameExp, binParentExp *ast.BinopExp) {
 			// 判断是否是自己所要的引用关系
 			a.ReferenceResult.MatchVarInfo(a, strName, fileResult.Name, locVar, fi, "", node, false)
 		}
+		// 第五轮，对局部变量和参数进行着色
+		if a.isFiveTerm() {
+			if locVar.IsParam {
+				a.ColorResult.InsertOneColorElem(common.CTParam, &node.Loc)
+			} else if locVar.DefineFuncLv == 0 {
+				a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &node.Loc)
+			} else {
+				a.ColorResult.InsertOneColorElem(common.CTLocalVar, &node.Loc)
+			}
+		}
 		return
 	}
+
+	// 第五轮，如果FindLocVar没找到，不需要额外处理
 
 	// 3) 判断是否为，引入的其他模块名，直接调用的模块中的变量
 	// 例如 require("lfs");
 	// 后面调用 lfs.mkdir("log");
 	if a.findReferModule(strName) {
+		// 第五轮，对引用模块变量也进行着色
+		if a.isFiveTerm() {
+			a.ColorResult.InsertOneColorElem(common.CTFileLocalVar, &node.Loc)
+		}
 		return
 	}
 
@@ -824,6 +844,12 @@ func (a *Analysis) findFuncColon(prefixExp ast.Exp, nameExp ast.Exp, nodeLoc lex
 		return
 	}
 
+	// 第五轮，对冒号调用的方法名进行成员函数着色
+	if a.isFiveTerm() {
+		a.ColorResult.InsertOneColorElem(common.CTMemberFunc, &keyLoc)
+		return
+	}
+
 	if !a.isFourTerm() {
 		return
 	}
@@ -1102,7 +1128,13 @@ func (a *Analysis) findTableDefine(node *ast.TableAccessExp) {
 	}
 
 	// 第五轮，不进行展开分析, 只分析到_G.a ,获取a的变量
+	// 根据上下文区分成员函数和成员变量着色
 	if a.isFiveTerm() {
+		if a.colorFuncContext {
+			a.ColorResult.InsertOneColorElem(common.CTMemberFunc, &keyLoc)
+		} else {
+			a.ColorResult.InsertOneColorElem(common.CTMemberField, &keyLoc)
+		}
 		return
 	}
 

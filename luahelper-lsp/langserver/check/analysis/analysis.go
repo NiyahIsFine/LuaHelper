@@ -52,6 +52,9 @@ type Analysis struct {
 	// 如果为第五阶段，查找当前文件所有的全局变量或函数位置信息
 	ColorResult *results.ColorFileResult
 
+	// 第五阶段，标记当前是否在函数调用/定义的上下文中（用于区分成员函数和成员变量着色）
+	colorFuncContext bool
+
 	// 第二阶段分析工程，需要找全局第一轮已经分析完的文件，指针指向；
 	// 第一阶段也需要，当前lua文件引入了其他文件的符号，例如require("one") 或是dofile("one.lua")
 	Projects projects.Projects

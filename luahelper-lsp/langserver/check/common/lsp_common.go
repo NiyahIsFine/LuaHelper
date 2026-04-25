@@ -11,7 +11,6 @@ import (
 // ItemKind type
 type ItemKind int
 
-//
 const (
 	// IKVariable 变量
 	IKVariable ItemKind = 1
@@ -126,6 +125,21 @@ const (
 
 	// CTAnnotate 注解产生的颜色类型
 	CTAnnotate ColorType = 2
+
+	// CTLocalVar 局部变量类型
+	CTLocalVar ColorType = 3
+
+	// CTParam 函数参数类型
+	CTParam ColorType = 4
+
+	// CTMemberField 成员变量（字段访问）类型
+	CTMemberField ColorType = 5
+
+	// CTFileLocalVar 文件顶层local变量类型（通常代表class/module）
+	CTFileLocalVar ColorType = 6
+
+	// CTMemberFunc 成员函数（通过:或.调用/定义的函数）类型
+	CTMemberFunc ColorType = 7
 )
 
 // OneColorResut 一种颜色类型的返回的数据

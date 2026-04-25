@@ -237,6 +237,15 @@ func (a *AllProject) getClassInfoSubMem(classInfo *common.OneClassInfo, strKey s
 				symbol.VarInfo = subVar
 			}
 		}
+		// 跨文件 ---@type ClassName 关联的变量中查找
+		if symbol.VarInfo == nil {
+			for _, extraVar := range classInfo.ExtraRelateVarList {
+				if subVar, ok := extraVar.Var.SubMaps[strKey]; ok {
+					symbol.VarInfo = subVar
+					break
+				}
+			}
+		}
 		return
 	}
 
@@ -244,6 +253,14 @@ func (a *AllProject) getClassInfoSubMem(classInfo *common.OneClassInfo, strKey s
 	if classInfo.RelateVar != nil {
 		// 自己的子项中，含有
 		if subVar, ok := classInfo.RelateVar.SubMaps[strKey]; ok {
+			symbol = a.createAnnotateSymbol(strKey, subVar)
+			return symbol
+		}
+	}
+
+	// 跨文件 ---@type ClassName 关联的变量中查找子成员
+	for _, extraVar := range classInfo.ExtraRelateVarList {
+		if subVar, ok := extraVar.Var.SubMaps[strKey]; ok {
 			symbol = a.createAnnotateSymbol(strKey, subVar)
 			return symbol
 		}
@@ -806,6 +823,11 @@ func (a *AllProject) getFuncDefSymbol(luaInFile string, node *ast.FuncDefExp, co
 // 根据table的调用，获取到对应的变量
 func (a *AllProject) getFuncRelateSymbol(luaInFile string, node *ast.FuncCallExp, comParam *CommonFuncParam,
 	findExpList *[]common.FindExpFile, varIndex uint8) (symbol *common.Symbol) {
+	funcName := ""
+	if node.NameExp != nil {
+		funcName = node.NameExp.Str
+	}
+	log.Debug("getFuncRelateSymbol called, file=%s, funcName=%s, argsLen=%d", luaInFile, funcName, len(node.Args))
 
 	// 如果是简单的函数调用，直接是这种a("b")
 	if nameExp, ok := node.PrefixExp.(*ast.NameExp); ok && node.NameExp == nil {

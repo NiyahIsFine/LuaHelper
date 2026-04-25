@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"luahelper-lsp/langserver/check/annotation/annotateast"
 	"luahelper-lsp/langserver/check/common"
 	"luahelper-lsp/langserver/check/compiler/ast"
@@ -839,9 +840,158 @@ func (a *AllProject) getFuncGenericVarInfo(oldSymbol *common.Symbol, fragment *c
 	return findSymbol
 }
 
+// getExpLastName 获取表达式的最后一部分名称（最后一个.后面的部分）
+// 例如 A1.A2.A3 返回 "A3"，单个变量名 x 返回 "x"
+func getExpLastName(exp ast.Exp) string {
+	switch node := exp.(type) {
+	case *ast.TableAccessExp:
+		// A1.A2.A3 形式，KeyExp 是最后的部分
+		if keyStr, ok := node.KeyExp.(*ast.StringExp); ok {
+			return keyStr.Str
+		}
+	case *ast.NameExp:
+		return node.Name
+	}
+	return ""
+}
+
+// getExpStringLiteral 获取表达式的字符串字面量值
+// 仅当表达式是字符串常量时返回其值
+func getExpStringLiteral(exp ast.Exp) string {
+	if strExp, ok := exp.(*ast.StringExp); ok {
+		return strExp.Str
+	}
+	return ""
+}
+
+// traceExpStringValue 追踪表达式的字符串值
+// 如果表达式是变量引用，尝试找到它指向的字符串常量值
+func (a *AllProject) traceExpStringValue(luaFile string, exp ast.Exp, comParam *CommonFuncParam) string {
+	// 尝试通过变量追踪找到字符串值
+	traceFindExpList := []common.FindExpFile{}
+	symList := a.FindDeepSymbolList(luaFile, exp, comParam, &traceFindExpList, false, 1)
+	for _, sym := range symList {
+		if sym.VarInfo == nil {
+			continue
+		}
+		// 检查变量的 ReferExp 是否为字符串
+		if strExp, ok := sym.VarInfo.ReferExp.(*ast.StringExp); ok {
+			return strExp.Str
+		}
+	}
+
+	// 如果追踪不到，返回空
+	return ""
+}
+
+// resolveUseArgType 处理返回类型中的 UseArgNameX 和 UseArgStringX 占位符
+// 如果类型名包含 UseArgNameX，则取函数调用第X个参数的最后一部分名称替换
+// 如果类型名包含 UseArgStringX，则取函数调用第X个参数的字符串字面量替换
+// 对于 UseArgStringX，如果参数不是直接字符串，会尝试追踪变量值
+// 返回替换后的新类型，如果不需要替换则返回原类型
+func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.FuncCallExp,
+	luaFile string, comParam *CommonFuncParam, findExpList *[]common.FindExpFile) annotateast.Type {
+	if node == nil {
+		return oneFunType
+	}
+
+	// 提取 NormalType，支持直接的 NormalType 或包装在 MultiType 中的单个 NormalType
+	var normalType *annotateast.NormalType
+	var isMulti bool
+	switch t := oneFunType.(type) {
+	case *annotateast.NormalType:
+		normalType = t
+	case *annotateast.MultiType:
+		if len(t.TypeList) == 1 {
+			if nt, ok := t.TypeList[0].(*annotateast.NormalType); ok {
+				normalType = nt
+				isMulti = true
+			}
+		}
+	}
+	if normalType == nil {
+		return oneFunType
+	}
+
+	strName := normalType.StrName
+	log.Debug("resolveUseArgType strName=%s, argsLen=%d", strName, len(node.Args))
+
+	// 尝试替换 UseArgNameX 或 UseArgStringX
+	newStrName := ""
+
+	// 检查 UseArgName1-4
+	for i := 1; i <= 4; i++ {
+		placeholder := fmt.Sprintf("UseArgName%d", i)
+		idx := strings.Index(strName, placeholder)
+		if idx < 0 {
+			continue
+		}
+		argIndex := i - 1
+		if argIndex >= len(node.Args) {
+			return oneFunType
+		}
+		argExp := node.Args[argIndex]
+		if _, isStr := argExp.(*ast.StringExp); isStr {
+			return oneFunType
+		}
+		lastName := getExpLastName(argExp)
+		log.Debug("resolveUseArgType UseArgName%d found, lastName=%s, argType=%T", i, lastName, argExp)
+		if lastName == "" {
+			return oneFunType
+		}
+		newStrName = strName[:idx] + lastName + strName[idx+len(placeholder):]
+		break
+	}
+
+	// 检查 UseArgString1-4
+	if newStrName == "" {
+		for i := 1; i <= 4; i++ {
+			placeholder := fmt.Sprintf("UseArgString%d", i)
+			idx := strings.Index(strName, placeholder)
+			if idx < 0 {
+				continue
+			}
+			argIndex := i - 1
+			if argIndex >= len(node.Args) {
+				return oneFunType
+			}
+			argExp := node.Args[argIndex]
+			strLiteral := getExpStringLiteral(argExp)
+			if strLiteral == "" {
+				// 不是直接字符串，尝试追踪变量的值
+				strLiteral = a.traceExpStringValue(luaFile, argExp, comParam)
+			}
+			if strLiteral == "" {
+				return oneFunType
+			}
+			newStrName = strName[:idx] + strLiteral + strName[idx+len(placeholder):]
+			break
+		}
+	}
+
+	if newStrName == "" {
+		return oneFunType
+	}
+
+	log.Debug("resolveUseArgType result: %s -> %s", strName, newStrName)
+	newNormalType := &annotateast.NormalType{
+		StrName:   newStrName,
+		NameLoc:   normalType.NameLoc,
+		ShowColor: normalType.ShowColor,
+	}
+	if isMulti {
+		return &annotateast.MultiType{
+			Loc:      oneFunType.(*annotateast.MultiType).Loc,
+			TypeList: []annotateast.Type{newNormalType},
+		}
+	}
+	return newNormalType
+}
+
 // 获取函数注释块是否有return语句, 如果有return语句，获取对应的type
 func (a *AllProject) getFuncReturnOneType(oldSymbol *common.Symbol, varIndex uint8, node *ast.FuncCallExp,
 	comParam *CommonFuncParam, findExpList *[]common.FindExpFile) (flag bool, symbol *common.Symbol) {
+	log.Debug("getFuncReturnOneType called, file=%s, node=%v", oldSymbol.FileName, node != nil)
 	// 判断注解类型是否存在
 	// 首先获取变量是否直接注解为函数的返回
 	flag, fragment, typeList, _ := a.getFuncReturnAnnotateTypeList(oldSymbol)
@@ -854,6 +1004,11 @@ func (a *AllProject) getFuncReturnOneType(oldSymbol *common.Symbol, varIndex uin
 	}
 
 	oneFunType := typeList[varIndex-1]
+
+	// 处理 UseArgNameX / UseArgStringX 占位符
+	callerFile := comParam.fileResult.Name
+	oneFunType = a.resolveUseArgType(oneFunType, node, callerFile, comParam, findExpList)
+
 	// 尝试获取泛型的推导
 	genericVarFile := a.getFuncGenericVarInfo(oldSymbol, fragment, oneFunType, node, comParam, findExpList)
 	if genericVarFile != nil {
@@ -900,6 +1055,9 @@ func (a *AllProject) getFuncIndexReturnSymbol(oldSymbol *common.Symbol, varIndex
 		}
 
 		oneReturnType := funType.ReturnTypeList[varIndex-1]
+		// 处理 UseArgNameX / UseArgStringX 占位符
+		callerFile2 := comParam.fileResult.Name
+		oneReturnType = a.resolveUseArgType(oneReturnType, node, callerFile2, comParam, findExpList)
 		symbol = &common.Symbol{
 			FileName:     fileName, // todo这里的文件名不太准确
 			VarInfo:      oldSymbol.VarInfo,

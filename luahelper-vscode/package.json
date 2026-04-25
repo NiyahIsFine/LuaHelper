@@ -315,18 +315,51 @@
                 },
                 "luahelper.colors.Global Field Color": {
                     "type": "string",
+                    "format": "color-hex",
                     "default": "#ee9d28",
                     "description": "%luahelper.colors.globalfield%"
                 },
                 "luahelper.colors.Global Fun Color": {
                     "type": "string",
+                    "format": "color-hex",
                     "default": "#ee9d28",
                     "description": "%luahelper.colors.globalfun%"
                 },
                 "luahelper.colors.Type(annotation) Color": {
                     "type": "string",
+                    "format": "color-hex",
                     "default": "#569CD6",
                     "description": "%luahelper.colors.annotatetype%"
+                },
+                "luahelper.colors.Local Var Color": {
+                    "type": "string",
+                    "format": "color-hex",
+                    "default": "#9CDCFE",
+                    "description": "%luahelper.colors.localvar%"
+                },
+                "luahelper.colors.Param Color": {
+                    "type": "string",
+                    "format": "color-hex",
+                    "default": "#7ECBFF",
+                    "description": "%luahelper.colors.param%"
+                },
+                "luahelper.colors.Member Field Color": {
+                    "type": "string",
+                    "format": "color-hex",
+                    "default": "#4FC1FF",
+                    "description": "%luahelper.colors.memberfield%"
+                },
+                "luahelper.colors.FileLocalVarColor": {
+                    "type": "string",
+                    "format": "color-hex",
+                    "default": "#4EC9B0",
+                    "description": "%luahelper.colors.filelocalvar%"
+                },
+                "luahelper.colors.MemberFuncColor": {
+                    "type": "string",
+                    "format": "color-hex",
+                    "default": "#DCDCAA",
+                    "description": "%luahelper.colors.memberfunc%"
                 },
 
                 "luahelper.base.rootdir": {

@@ -45,6 +45,11 @@ func (a *AllProject) convertClassInfoToHovers(oneClass *common.OneClassInfo, exi
 	}
 
 	a.getVarInfoMapStr(oneClass.RelateVar, existMap)
+
+	// 跨文件 ---@type ClassName 关联的变量
+	for _, extraVar := range oneClass.ExtraRelateVarList {
+		a.getVarInfoMapStr(extraVar.Var, existMap)
+	}
 }
 
 // 代码补全时，有注解类型的字段提示
@@ -527,7 +532,7 @@ func GetStrComment(strComment string) (str string) {
 		oneStr = strings.TrimLeft(oneStr, " ")
 		oneStr = strings.TrimPrefix(oneStr, "-*")
 		//oneStr = strings.TrimPrefix(oneStr, "*")
-		oneStr = strings.TrimPrefix(oneStr, "-")
+		oneStr = strings.TrimLeft(oneStr, "-")
 		oneStr = strings.TrimLeft(oneStr, " ")
 
 		annotatFlag = false

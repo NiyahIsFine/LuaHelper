@@ -159,6 +159,33 @@ func (a *AllProject) rebuidCreateTypeMap() {
 	tc := time.Since(time1)
 	ftime := tc.Milliseconds()
 	log.Debug("rebuidCreateTypeMap time:%d", ftime)
+
+	// 构建跨文件的 ExtraRelateVarList
+	a.buildExtraRelateVars()
+}
+
+// buildExtraRelateVars 构建跨文件的 ---@type ClassName 关联变量
+// 遍历所有文件，收集 ---@type 注解引用了其他文件中定义的 class 的变量
+func (a *AllProject) buildExtraRelateVars() {
+	// 先清空所有 class 的 ExtraRelateVarList
+	for _, typeList := range a.createTypeMap {
+		for _, oneCreate := range typeList.List {
+			if oneCreate.ClassInfo != nil {
+				oneCreate.ClassInfo.ExtraRelateVarList = nil
+			}
+		}
+	}
+
+	for _, fileStruct := range a.fileStructMap {
+		if fileStruct.FileResult == nil {
+			continue
+		}
+		fileStruct.AnnotateFile.CollectExtraRelateVars(
+			a.createTypeMap,
+			fileStruct.FileResult.GlobalMaps,
+			fileStruct.FileResult.MainFunc.MainScope,
+		)
+	}
 }
 
 // GetAllFilesMap 获取分析的文件map列表

@@ -5,9 +5,14 @@ export interface AnnotatorParams {
 }
 
 export enum AnnotatorType {
-    GlobalVar,
-    GlobalFunc,
-    AnnotateType,
+    GlobalVar,      // = 0
+    GlobalFunc,     // = 1
+    AnnotateType,   // = 2
+    LocalVar,       // = 3
+    Param,          // = 4
+    MemberField,    // = 5
+    FileLocalVar,   // = 6
+    MemberFunc,     // = 7
 }
 
 export interface IAnnotator {
