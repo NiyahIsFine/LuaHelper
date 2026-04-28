@@ -955,24 +955,109 @@ func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.Fu
 		return oneFunType
 	}
 
-	// 提取 NormalType，支持直接的 NormalType 或包装在 MultiType 中的单个 NormalType
-	var normalType *annotateast.NormalType
-	var isMulti bool
 	switch t := oneFunType.(type) {
 	case *annotateast.NormalType:
-		normalType = t
+		return a.resolveUseArgNormalType(t, node, luaFile, comParam)
 	case *annotateast.MultiType:
-		if len(t.TypeList) == 1 {
-			if nt, ok := t.TypeList[0].(*annotateast.NormalType); ok {
-				normalType = nt
-				isMulti = true
+		newTypeList := make([]annotateast.Type, 0, len(t.TypeList))
+		changed := false
+		for _, oneType := range t.TypeList {
+			newType := a.resolveUseArgType(oneType, node, luaFile, comParam, findExpList)
+			if newType != oneType {
+				changed = true
 			}
+			newTypeList = append(newTypeList, newType)
+		}
+		if !changed {
+			return oneFunType
+		}
+		return &annotateast.MultiType{
+			Loc:      t.Loc,
+			TypeList: newTypeList,
+		}
+	case *annotateast.ArrayType:
+		newItemType := a.resolveUseArgType(t.ItemType, node, luaFile, comParam, findExpList)
+		if newItemType == t.ItemType {
+			return oneFunType
+		}
+		return &annotateast.ArrayType{
+			Loc:      t.Loc,
+			ItemType: newItemType,
+		}
+	case *annotateast.TableType:
+		newKeyType := a.resolveUseArgType(t.KeyType, node, luaFile, comParam, findExpList)
+		newValueType := a.resolveUseArgType(t.ValueType, node, luaFile, comParam, findExpList)
+		if newKeyType == t.KeyType && newValueType == t.ValueType {
+			return oneFunType
+		}
+		return &annotateast.TableType{
+			Loc:         t.Loc,
+			TableStrLoc: t.TableStrLoc,
+			EmptyFlag:   t.EmptyFlag,
+			KeyType:     newKeyType,
+			ValueType:   newValueType,
+		}
+	case *annotateast.FuncType:
+		newParamTypeList := make([]annotateast.Type, 0, len(t.ParamTypeList))
+		newReturnTypeList := make([]annotateast.Type, 0, len(t.ReturnTypeList))
+		changed := false
+		for _, oneType := range t.ParamTypeList {
+			newType := a.resolveUseArgType(oneType, node, luaFile, comParam, findExpList)
+			if newType != oneType {
+				changed = true
+			}
+			newParamTypeList = append(newParamTypeList, newType)
+		}
+		for _, oneType := range t.ReturnTypeList {
+			newType := a.resolveUseArgType(oneType, node, luaFile, comParam, findExpList)
+			if newType != oneType {
+				changed = true
+			}
+			newReturnTypeList = append(newReturnTypeList, newType)
+		}
+		if !changed {
+			return oneFunType
+		}
+		return &annotateast.FuncType{
+			Loc:              t.Loc,
+			FunLoc:           t.FunLoc,
+			ParamNameList:    t.ParamNameList,
+			ParamNameLocList: t.ParamNameLocList,
+			ParamTypeList:    newParamTypeList,
+			ParamOptionList:  t.ParamOptionList,
+			ReturnTypeList:   newReturnTypeList,
+		}
+	case *annotateast.ObjectType:
+		newFields := make([]*annotateast.AnnotateFieldState, 0, len(t.Fields))
+		newFieldMap := make(map[string]*annotateast.AnnotateFieldState, len(t.FieldMap))
+		changed := false
+		for _, field := range t.Fields {
+			newField := field
+			newFiledType := a.resolveUseArgType(field.FiledType, node, luaFile, comParam, findExpList)
+			if newFiledType != field.FiledType {
+				changed = true
+				fieldCopy := *field
+				fieldCopy.FiledType = newFiledType
+				newField = &fieldCopy
+			}
+			newFields = append(newFields, newField)
+			newFieldMap[newField.Name] = newField
+		}
+		if !changed {
+			return oneFunType
+		}
+		return &annotateast.ObjectType{
+			Loc:      t.Loc,
+			FieldMap: newFieldMap,
+			Fields:   newFields,
 		}
 	}
-	if normalType == nil {
-		return oneFunType
-	}
 
+	return oneFunType
+}
+
+func (a *AllProject) resolveUseArgNormalType(normalType *annotateast.NormalType, node *ast.FuncCallExp,
+	luaFile string, comParam *CommonFuncParam) annotateast.Type {
 	strName := normalType.StrName
 	log.Debug("resolveUseArgType strName=%s, argsLen=%d", strName, len(node.Args))
 
@@ -988,16 +1073,16 @@ func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.Fu
 		}
 		argIndex := i - 1
 		if argIndex >= len(node.Args) {
-			return oneFunType
+			return normalType
 		}
 		argExp := node.Args[argIndex]
 		if _, isStr := argExp.(*ast.StringExp); isStr {
-			return oneFunType
+			return normalType
 		}
 		lastName := getExpLastName(argExp)
 		log.Debug("resolveUseArgType UseArgName%d found, lastName=%s, argType=%T", i, lastName, argExp)
 		if lastName == "" {
-			return oneFunType
+			return normalType
 		}
 		newStrName = strName[:idx] + lastName + strName[idx+len(placeholder):]
 		break
@@ -1013,7 +1098,7 @@ func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.Fu
 			}
 			argIndex := i - 1
 			if argIndex >= len(node.Args) {
-				return oneFunType
+				return normalType
 			}
 			argExp := node.Args[argIndex]
 			strLiteral := getExpStringLiteral(argExp)
@@ -1022,7 +1107,7 @@ func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.Fu
 				strLiteral = a.traceExpStringValue(luaFile, argExp, comParam)
 			}
 			if strLiteral == "" {
-				return oneFunType
+				return normalType
 			}
 			newStrName = strName[:idx] + strLiteral + strName[idx+len(placeholder):]
 			break
@@ -1030,22 +1115,15 @@ func (a *AllProject) resolveUseArgType(oneFunType annotateast.Type, node *ast.Fu
 	}
 
 	if newStrName == "" {
-		return oneFunType
+		return normalType
 	}
 
 	log.Debug("resolveUseArgType result: %s -> %s", strName, newStrName)
-	newNormalType := &annotateast.NormalType{
+	return &annotateast.NormalType{
 		StrName:   newStrName,
 		NameLoc:   normalType.NameLoc,
 		ShowColor: normalType.ShowColor,
 	}
-	if isMulti {
-		return &annotateast.MultiType{
-			Loc:      oneFunType.(*annotateast.MultiType).Loc,
-			TypeList: []annotateast.Type{newNormalType},
-		}
-	}
-	return newNormalType
 }
 
 // 获取函数注释块是否有return语句, 如果有return语句，获取对应的type
