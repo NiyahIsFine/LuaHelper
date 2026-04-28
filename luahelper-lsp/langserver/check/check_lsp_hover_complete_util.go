@@ -96,6 +96,21 @@ func (a *AllProject) getClassFieldStr(classInfo *common.OneClassInfo) (str strin
 	return str
 }
 
+func (a *AllProject) getClassListFieldStr(classList []*common.OneClassInfo) (str string) {
+	var existMap map[string]string = map[string]string{}
+	str = " = {\n"
+	for _, classInfo := range classList {
+		a.convertClassInfoToHovers(classInfo, existMap)
+	}
+
+	traverseMapInStringOrder(existMap, func(key string, value string) {
+		str = str + "\t" + value + "\n"
+	})
+
+	str = str + "}"
+	return str
+}
+
 // funcFlag 表示是否为函数名匹配，增加（）后能够匹配
 func matchVecsExpandStrMap(inputVec []string, inputFuncVec []bool, expandStr string) (remainVec []string) {
 	expandVec := strings.Split(expandStr, ".")

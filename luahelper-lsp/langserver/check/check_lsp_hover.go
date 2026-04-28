@@ -67,11 +67,16 @@ func (a *AllProject) AnnotateTypeHover(strFile, strLine, strWord string, line, c
 		if createType.ClassInfo != nil {
 			//str := a.expandTableHover(symbol)
 			//strLabel = "class " + typeStr
+			classList := a.getClassTypeInfoList(typeStr, strFile, line,
+				&common.CreateTypeList{List: []*common.CreateTypeInfo{}}, map[string]bool{})
+			if len(classList) == 0 {
+				classList = append(classList, createType.ClassInfo)
+			}
 
 			if len(createType.ClassInfo.ClassState.ParentNameList) > 0 {
 				strLabel = typeStr + " : " + strings.Join(createType.ClassInfo.ClassState.ParentNameList, " , ")
 			} else {
-				strLabel = typeStr + a.getClassFieldStr(createType.ClassInfo)
+				strLabel = typeStr + a.getClassListFieldStr(classList)
 			}
 
 			strComment := createType.ClassInfo.ClassState.Comment

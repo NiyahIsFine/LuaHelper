@@ -141,6 +141,10 @@ func (a *AllProject) checkCreateTypeListDuplicate(str string, createList common.
 		return
 	}
 
+	if isMergeableDuplicateClassList(createList) {
+		return
+	}
+
 	for index, oneCreate := range createList.List {
 		luaFile, loc := oneCreate.GetFileNameAndLoc()
 		annotateFile := a.getNotCacheAnnotateFile(luaFile)
@@ -167,6 +171,20 @@ func (a *AllProject) checkCreateTypeListDuplicate(str string, createList common.
 
 		annotateFile.PushTypeDuplicateError(errStr, loc, relateVec)
 	}
+}
+
+func isMergeableDuplicateClassList(createList common.CreateTypeList) bool {
+	if len(createList.List) == 0 {
+		return false
+	}
+
+	for _, oneCreate := range createList.List {
+		if oneCreate == nil || oneCreate.ClassInfo == nil || oneCreate.AliasInfo != nil {
+			return false
+		}
+	}
+
+	return true
 }
 
 // 根据文件名称，获取到文件的注解文件，没有缓存出
@@ -288,17 +306,24 @@ func (a *AllProject) IsFieldOfClass(className string, fieldName string) bool {
 	}
 
 	createTypeList, flag := a.createTypeMap[className]
-	if !flag || len(createTypeList.List) != 1 {
+	if !flag || len(createTypeList.List) == 0 {
 		return true
 	}
 
-	ci := createTypeList.List[0].ClassInfo
-	if ci == nil {
-		return true
+	hasClassInfo := false
+	for _, createType := range createTypeList.List {
+		ci := createType.ClassInfo
+		if ci == nil {
+			continue
+		}
+
+		hasClassInfo = true
+		if _, ok := ci.FieldMap[fieldName]; ok {
+			return true
+		}
 	}
 
-	_, ok := ci.FieldMap[fieldName]
-	return ok
+	return !hasClassInfo
 }
 
 // 查找成员函数的返回值类型
@@ -310,17 +335,32 @@ func (a *AllProject) GetFuncReturnTypeByClass(className string, funcName string)
 	}
 
 	createTypeList, flag := a.createTypeMap[className]
-	if !flag || len(createTypeList.List) != 1 {
+	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
 
-	ci := createTypeList.List[0].ClassInfo
-	if ci == nil {
-		return
+	for _, createType := range createTypeList.List {
+		ci := createType.ClassInfo
+		if ci == nil {
+			continue
+		}
+
+		ann, ok := ci.FieldMap[funcName]
+		if !ok {
+			continue
+		}
+
+		retVec = getFuncReturnTypeByField(ann)
+		if len(retVec) > 0 {
+			return
+		}
 	}
 
-	ann, ok := ci.FieldMap[funcName]
-	if !ok {
+	return
+}
+
+func getFuncReturnTypeByField(ann *annotateast.AnnotateFieldState) (retVec [][]string) {
+	if ann == nil {
 		return
 	}
 
@@ -368,17 +408,33 @@ func (a *AllProject) GetFuncParamTypeByClass(className string, funcName string) 
 	}
 
 	createTypeList, flag := a.createTypeMap[className]
-	if !flag || len(createTypeList.List) != 1 {
+	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
 
-	ci := createTypeList.List[0].ClassInfo
-	if ci == nil {
-		return
+	for _, createType := range createTypeList.List {
+		ci := createType.ClassInfo
+		if ci == nil {
+			continue
+		}
+
+		ann, ok := ci.FieldMap[funcName]
+		if !ok {
+			continue
+		}
+
+		retMap = getFuncParamTypeByField(ann)
+		if len(retMap) > 0 {
+			return
+		}
 	}
 
-	ann, ok := ci.FieldMap[funcName]
-	if !ok {
+	return
+}
+
+func getFuncParamTypeByField(ann *annotateast.AnnotateFieldState) (retMap map[string][]string) {
+	retMap = make(map[string][]string)
+	if ann == nil {
 		return
 	}
 
@@ -655,9 +711,11 @@ func (a *AllProject) getClassTypeInfoList(strName string, fileName string, lastL
 		}
 
 		repeatTypeList.List = append(repeatTypeList.List, createBestType)
+		shouldMergeGlobalClass := false
 
 		// 1.3) 查找到了，判断是否有ClassInfo
 		if createBestType.ClassInfo != nil {
+			shouldMergeGlobalClass = true
 			classList = append(classList, createBestType.ClassInfo)
 
 			// 所有父类型也处理下，再次递归获取
@@ -684,7 +742,9 @@ func (a *AllProject) getClassTypeInfoList(strName string, fileName string, lastL
 			classList = append(classList, classListTmp...)
 		}
 
-		return
+		if !shouldMergeGlobalClass {
+			return
+		}
 	}
 
 	// 2.1) 获取所有的全局信息
@@ -1903,6 +1963,8 @@ func (a *AllProject) getStrNameDefineLocVec(strName string, fileName string, las
 	// 1.1) 这个文件查找这个符号
 	createBestType := annotateFile.GetBestCreateTypeInfo(strName, lastLine)
 	if createBestType != nil {
+		shouldMergeGlobalClass := false
+
 		// 1.4) 判断是否为OneAliasInfo
 		if createBestType.AliasInfo != nil {
 			oneFile := typeStrFile{
@@ -1915,6 +1977,7 @@ func (a *AllProject) getStrNameDefineLocVec(strName string, fileName string, las
 		}
 
 		if createBestType.ClassInfo != nil {
+			shouldMergeGlobalClass = true
 			oneFile := typeStrFile{
 				FileName:  fileName,
 				Loc:       createBestType.ClassInfo.ClassState.NameLoc,
@@ -1923,7 +1986,10 @@ func (a *AllProject) getStrNameDefineLocVec(strName string, fileName string, las
 
 			list = append(list, oneFile)
 		}
-		return
+
+		if !shouldMergeGlobalClass {
+			return
+		}
 	}
 
 	// 2.1) 获取所有的全局信息
@@ -1945,6 +2011,10 @@ func (a *AllProject) getStrNameDefineLocVec(strName string, fileName string, las
 		}
 
 		if oneCreate.ClassInfo != nil {
+			if createBestType == oneCreate {
+				continue
+			}
+
 			oneFile := typeStrFile{
 				FileName:  oneCreate.ClassInfo.LuaFile,
 				Loc:       oneCreate.ClassInfo.ClassState.NameLoc,

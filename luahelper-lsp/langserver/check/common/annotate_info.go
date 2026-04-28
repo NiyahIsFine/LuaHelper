@@ -879,7 +879,6 @@ func (af *AnnotateFile) CollectExtraRelateVars(globalCreateTypeMap map[string]Cr
 						Var:     varInfo,
 						LuaFile: af.LuaFile,
 					})
-					break
 				}
 			}
 			break
