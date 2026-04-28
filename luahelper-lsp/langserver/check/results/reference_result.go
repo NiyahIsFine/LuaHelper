@@ -154,6 +154,10 @@ func (r *ReferenceFileResult) SetFileResult(fileResult *FileResult) {
 // 查找所有引用的全局变量，在所有的第二阶段工程，和三阶段散落的文件集合中查找
 func (r *ReferenceFileResult) FindProjectGlobal(selfConvert SelfConvertInterface, strName string, strProPre string,
 	fi *common.FuncInfo, strPreExp string, nameExp ast.Exp) bool {
+	if r.findSymbol == nil {
+		return false
+	}
+
 	if !r.findSymbol.IsGlobal() {
 		return false
 	}
