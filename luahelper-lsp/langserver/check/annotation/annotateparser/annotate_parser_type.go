@@ -28,6 +28,8 @@ func parserSingleType(l *annotatelexer.AnnotateLexer) annotateast.Type {
 		subType = parserFunType(l)
 	} else if lookHeardKind == annotatelexer.ATokenKwTable {
 		subType = parserTableType(l)
+	} else if lookHeardKind == annotatelexer.ATokenVSepLbrace {
+		subType = parserObjectType(l)
 	} else if lookHeardKind == annotatelexer.ATokenKwIdentifier {
 		// 为其他的标识符
 		nameStr := l.NextTypeIdentifier()
@@ -78,6 +80,47 @@ func parserSingleType(l *annotatelexer.AnnotateLexer) annotateast.Type {
 	}
 
 	return subType
+}
+
+// 解析匿名对象类型
+// ---@type {id: integer, data: DataClass, dic: table<integer, boolean>}
+func parserObjectType(l *annotatelexer.AnnotateLexer) annotateast.Type {
+	beginLoc := l.GetHeardLoc()
+	l.NextTokenOfKind(annotatelexer.ATokenVSepLbrace)
+
+	objectType := &annotateast.ObjectType{
+		FieldMap: map[string]*annotateast.AnnotateFieldState{},
+		Fields:   []*annotateast.AnnotateFieldState{},
+	}
+
+	if l.LookAheadKind() != annotatelexer.ATokenVSepRbrace {
+		for {
+			fieldState := &annotateast.AnnotateFieldState{}
+			fieldState.Name = l.NextFieldName()
+			fieldState.NameLoc = l.GetNowLoc()
+			fieldState.FieldScopeType = annotateast.FieldScopePublic
+			fieldState.FieldColonType = annotateast.FieldColonNo
+
+			l.NextTokenOfKind(annotatelexer.ATokenSepColon)
+			fieldState.FiledType = parserOneType(l)
+
+			objectType.FieldMap[fieldState.Name] = fieldState
+			objectType.Fields = append(objectType.Fields, fieldState)
+
+			if l.LookAheadKind() != annotatelexer.ATokenSepComma {
+				break
+			}
+			l.NextTokenOfKind(annotatelexer.ATokenSepComma)
+			if l.LookAheadKind() == annotatelexer.ATokenVSepRbrace {
+				break
+			}
+		}
+	}
+
+	l.NextTokenOfKind(annotatelexer.ATokenVSepRbrace)
+	endLoc := l.GetNowLoc()
+	objectType.Loc = lexer.GetRangeLoc(&beginLoc, &endLoc)
+	return objectType
 }
 
 // 解析最复杂的单个类型，包含 |

@@ -435,6 +435,9 @@ func (a *AllProject) collectAnnotateClassNameByExp(strFile string, exp ast.Exp, 
 		for _, className := range annotateast.GetAllNormalStrList(symbol.AnnotateType) {
 			addClassName(className)
 		}
+		for _, className := range a.getObjectTypeClassNames(symbol.AnnotateType, symbol.FileName) {
+			addClassName(className)
+		}
 	}
 	if symbol.VarInfo != nil {
 		if className := a.getAnnotateClassByRelateVar(symbol.VarInfo); className != "" {

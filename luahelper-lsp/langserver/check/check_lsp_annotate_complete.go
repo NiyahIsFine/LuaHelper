@@ -356,6 +356,8 @@ func (a *AllProject) getVarInfoCompleteExt(symbol *common.Symbol, colonFlag bool
 
 	// 1) 判断注解开关是否有打开, 如果注解打开获取注解的里面的信息
 	if symbol.AnnotateType != nil {
+		a.objectTypeComplete(symbol.AnnotateType, symbol.FileName, symbol.GetLine(), colonFlag)
+
 		classList := a.getAllNormalAnnotateClass(symbol.AnnotateType, symbol.FileName, symbol.GetLine())
 		for _, oneClass := range classList {
 			a.convertClassInfoToCompleteVecs(oneClass, colonFlag)
@@ -367,6 +369,47 @@ func (a *AllProject) getVarInfoCompleteExt(symbol *common.Symbol, colonFlag bool
 
 	// 2) 没有注解的模式
 	a.getVarCompleteExt(symbol.FileName, symbol.VarInfo, colonFlag)
+}
+
+func (a *AllProject) objectTypeComplete(astType annotateast.Type, fileName string, line int, colonFlag bool) {
+	switch subAst := astType.(type) {
+	case *annotateast.MultiType:
+		for _, oneType := range subAst.TypeList {
+			a.objectTypeComplete(oneType, fileName, line, colonFlag)
+		}
+	case *annotateast.ObjectType:
+		for _, fieldState := range subAst.Fields {
+			if colonFlag && fieldState.FieldColonType != annotateast.FieldColonYes {
+				continue
+			}
+			if !colonFlag && fieldState.FieldColonType != annotateast.FieldColonNo {
+				continue
+			}
+
+			a.completeCache.InsertCompleteClassField(fileName, fieldState.Name, fieldState, fieldState.FieldColonType)
+		}
+	case *annotateast.NormalType:
+		annotateFile := a.getAnnotateFile(fileName)
+		if annotateFile == nil {
+			return
+		}
+
+		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
+		if !ok {
+			createTypeList, ok = a.createTypeMap[subAst.StrName]
+		}
+		if !ok {
+			return
+		}
+
+		for _, createTypeInfo := range createTypeList.List {
+			if createTypeInfo.AliasInfo == nil {
+				continue
+			}
+			a.objectTypeComplete(createTypeInfo.AliasInfo.AliasState.AliasType,
+				createTypeInfo.AliasInfo.LuaFile, createTypeInfo.LastLine, colonFlag)
+		}
+	}
 }
 
 // 获取函数的返回代码补全

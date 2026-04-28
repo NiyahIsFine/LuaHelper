@@ -158,6 +158,14 @@ func (l *AnnotateLexer) NextTokenStruct() {
 		l.next(1)
 		l.setNowToken(ATokenVSepRbrack, "]")
 		return
+	case '{':
+		l.next(1)
+		l.setNowToken(ATokenVSepLbrace, "{")
+		return
+	case '}':
+		l.next(1)
+		l.setNowToken(ATokenVSepRbrace, "}")
+		return
 	case '|':
 		l.next(1)
 		l.setNowToken(ATokenBor, "|")

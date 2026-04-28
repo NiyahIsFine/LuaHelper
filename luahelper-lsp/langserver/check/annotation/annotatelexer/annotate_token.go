@@ -12,6 +12,8 @@ const (
 	ATokenVSepRparen                     // )
 	ATokenVSepLbrack                     // [
 	ATokenVSepRbrack                     // ]
+	ATokenVSepLbrace                     // {
+	ATokenVSepRbrace                     // }
 	ATokenBor                            // |
 	ATokenLt                             // <
 	ATokenGt                             // >

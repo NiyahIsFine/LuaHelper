@@ -2,6 +2,7 @@ package annotateast
 
 import (
 	"luahelper-lsp/langserver/check/compiler/lexer"
+	"strings"
 )
 
 // TraverseOneType 遍历解析这个type，获取最简单的type类型字符串，只允许简单
@@ -58,6 +59,13 @@ func TypeConvertStr(astType Type) string {
 		}
 
 		return "table<" + TypeConvertStr(subAst.KeyType) + ", " + TypeConvertStr(subAst.ValueType) + ">"
+
+	case *ObjectType:
+		fieldStrList := []string{}
+		for _, field := range subAst.Fields {
+			fieldStrList = append(fieldStrList, field.Name+": "+TypeConvertStr(field.FiledType))
+		}
+		return "{" + strings.Join(fieldStrList, ", ") + "}"
 
 	case *FuncType:
 		funStr := "function("
@@ -175,6 +183,9 @@ func GetAllNormalStrList(astType Type) (strList []string) {
 	case *TableType:
 		strList = append(strList, "table")
 		return strList
+	case *ObjectType:
+		strList = append(strList, "table")
+		return strList
 	case *FuncType:
 		strList = append(strList, "function")
 		return strList
@@ -219,6 +230,8 @@ func GetAstTypeLoc(astType Type) lexer.Location {
 	case *ArrayType:
 		return subAst.Loc
 	case *TableType:
+		return subAst.Loc
+	case *ObjectType:
 		return subAst.Loc
 	}
 
@@ -276,6 +289,11 @@ func GetTypeColorLocVec(astType Type) (locVec []lexer.Location) {
 
 			valueLocVec := GetTypeColorLocVec(subAst.ValueType)
 			locVec = append(locVec, valueLocVec...)
+		}
+	case *ObjectType:
+		for _, field := range subAst.Fields {
+			subLocVec := GetTypeColorLocVec(field.FiledType)
+			locVec = append(locVec, subLocVec...)
 		}
 	}
 
@@ -343,6 +361,19 @@ func GetTypeLocInfo(astType Type, col int) (typeStr string, noticeStr string) {
 			}
 
 			typeStr, noticeStr = GetTypeLocInfo(subAst.ValueType, col)
+			if typeStr != "" || noticeStr != "" {
+				return typeStr, noticeStr
+			}
+		}
+	case *ObjectType:
+		for _, field := range subAst.Fields {
+			if colInLocation(field.NameLoc, col) {
+				typeStr = ""
+				noticeStr = "field name"
+				return
+			}
+
+			typeStr, noticeStr = GetTypeLocInfo(field.FiledType, col)
 			if typeStr != "" || noticeStr != "" {
 				return typeStr, noticeStr
 			}
@@ -553,6 +584,14 @@ func GetAllStrAndLocList(astType Type) (strList []string, locList []lexer.Locati
 		tmpStrList, tmpLocList = GetAllStrAndLocList(subAst.ValueType)
 		strList = append(strList, tmpStrList...)
 		locList = append(locList, tmpLocList...)
+
+		return
+	case *ObjectType:
+		for _, field := range subAst.Fields {
+			tmpStrList, tmpLocList := GetAllStrAndLocList(field.FiledType)
+			strList = append(strList, tmpStrList...)
+			locList = append(locList, tmpLocList...)
+		}
 
 		return
 	case *FuncType:

@@ -50,6 +50,13 @@ type TableType struct {
 	ValueType   Type           // 里面的Value类型，又是Type的一种
 }
 
+// ObjectType 匿名对象类型，例如 {id: integer, data: DataClass}
+type ObjectType struct {
+	Loc      lexer.Location
+	FieldMap map[string]*AnnotateFieldState
+	Fields   []*AnnotateFieldState
+}
+
 // FuncType 函数的类型
 type FuncType struct {
 	Loc              lexer.Location   // 整个func包含的位置信息

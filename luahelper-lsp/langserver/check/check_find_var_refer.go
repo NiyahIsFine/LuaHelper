@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"luahelper-lsp/langserver/check/annotation/annotateast"
 	"luahelper-lsp/langserver/check/common"
 	"luahelper-lsp/langserver/check/compiler/ast"
@@ -309,6 +310,104 @@ func (a *AllProject) getTableTypeMemKey(astType annotateast.Type, fileName strin
 	return symbol
 }
 
+func objectTypeClassName(fileName string, objectType *annotateast.ObjectType) string {
+	if objectType == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("__anonymous_object_%s_%d_%d", fileName, objectType.Loc.StartLine, objectType.Loc.StartColumn)
+}
+
+func (a *AllProject) getObjectTypeClassNames(astType annotateast.Type, fileName string) (classNameVec []string) {
+	switch subAst := astType.(type) {
+	case *annotateast.MultiType:
+		for _, oneType := range subAst.TypeList {
+			classNameVec = append(classNameVec, a.getObjectTypeClassNames(oneType, fileName)...)
+		}
+	case *annotateast.ObjectType:
+		classNameVec = append(classNameVec, objectTypeClassName(fileName, subAst))
+	case *annotateast.NormalType:
+		annotateFile := a.getAnnotateFile(fileName)
+		if annotateFile == nil {
+			return classNameVec
+		}
+
+		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
+		if !ok {
+			createTypeList, ok = a.createTypeMap[subAst.StrName]
+		}
+		if !ok {
+			return classNameVec
+		}
+
+		for _, createTypeInfo := range createTypeList.List {
+			if createTypeInfo.AliasInfo == nil {
+				continue
+			}
+			classNameVec = append(classNameVec,
+				a.getObjectTypeClassNames(createTypeInfo.AliasInfo.AliasState.AliasType,
+					createTypeInfo.AliasInfo.LuaFile)...)
+		}
+	}
+
+	return classNameVec
+}
+
+func (a *AllProject) getObjectTypeMemKey(astType annotateast.Type, fileName string, line int, strKey string) (symbol *common.Symbol) {
+	switch subAst := astType.(type) {
+	case *annotateast.MultiType:
+		for _, oneType := range subAst.TypeList {
+			if symbol = a.getObjectTypeMemKey(oneType, fileName, line, strKey); symbol != nil {
+				return symbol
+			}
+		}
+	case *annotateast.ObjectType:
+		fieldState, ok := subAst.FieldMap[strKey]
+		if !ok {
+			return nil
+		}
+
+		symbol = &common.Symbol{
+			FileName:        fileName,
+			VarInfo:         nil,
+			AnnotateType:    fieldState.FiledType,
+			VarFlag:         common.FirstAnnotateFlag,
+			AnnotateLine:    line,
+			AnnotateLoc:     fieldState.NameLoc,
+			AnnotateComment: fieldState.Comment,
+			StrPreComment:   "field",
+			StrPreClassName: objectTypeClassName(fileName, subAst),
+		}
+		return symbol
+	case *annotateast.NormalType:
+		annotateFile := a.getAnnotateFile(fileName)
+		if annotateFile == nil {
+			return nil
+		}
+
+		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
+		if !ok {
+			createTypeList, ok = a.createTypeMap[subAst.StrName]
+		}
+		if !ok {
+			return nil
+		}
+
+		for _, createTypeInfo := range createTypeList.List {
+			if createTypeInfo.AliasInfo == nil {
+				continue
+			}
+			aliasType := createTypeInfo.AliasInfo.AliasState.AliasType
+			if symbol = a.getObjectTypeMemKey(aliasType, createTypeInfo.AliasInfo.LuaFile,
+				createTypeInfo.LastLine, strKey); symbol != nil {
+				return symbol
+			}
+		}
+	}
+
+	return nil
+}
+
 // 根据table的调用，获取到对应的变量
 func (a *AllProject) getTableAccessRelateSymbol(luaInFile string, node *ast.TableAccessExp, comParam *CommonFuncParam,
 	findExpList *[]common.FindExpFile) (symbol *common.Symbol) {
@@ -453,6 +552,12 @@ func (a *AllProject) symbolHasSubKey(oldSymbol *common.Symbol, strKey string,
 	tableSubFile := a.getTableTypeMemKey(oldSymbol.AnnotateType, oldSymbol.FileName, line)
 	if tableSubFile != nil {
 		symbol = tableSubFile
+		return
+	}
+
+	objectSubFile := a.getObjectTypeMemKey(oldSymbol.AnnotateType, oldSymbol.FileName, line, strKey)
+	if objectSubFile != nil {
+		symbol = objectSubFile
 		return
 	}
 

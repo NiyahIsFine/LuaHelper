@@ -134,6 +134,55 @@ func TestAnnotateParserType(t *testing.T) {
 	}
 }
 
+func TestAnnotateParserObjectType(t *testing.T) {
+	commentInfo := &lexer.CommentInfo{
+		LineVec: []lexer.CommentLine{
+			{
+				Str:  "-@type {id: integer, data: DataClass, dic: table<integer, boolean>}",
+				Line: 1,
+				Col:  0,
+			},
+		},
+	}
+	fragment, errVec := ParseCommentFragment(commentInfo)
+	if len(errVec) != 0 {
+		t.Fatalf("parser annotate object type fatal, errstr=%s", errVec[0].ShowStr)
+	}
+	if len(fragment.Stats) != 1 {
+		t.Fatalf("parser annotate object type stats is not equal")
+	}
+
+	typeState, ok := fragment.Stats[0].(*annotateast.AnnotateTypeState)
+	if !ok {
+		t.Fatalf("parser annotate object type stats is type")
+	}
+	if len(typeState.ListType) != 1 {
+		t.Fatalf("parser annotate object type list len is err")
+	}
+
+	multiType, ok := typeState.ListType[0].(*annotateast.MultiType)
+	if !ok || len(multiType.TypeList) != 1 {
+		t.Fatalf("parser annotate object type multi type is err")
+	}
+
+	objectType, ok := multiType.TypeList[0].(*annotateast.ObjectType)
+	if !ok {
+		t.Fatalf("parser annotate object type is not object")
+	}
+	if len(objectType.Fields) != 3 {
+		t.Fatalf("parser annotate object type fields len is err")
+	}
+	if objectType.Fields[0].Name != "id" || annotateast.TypeConvertStr(objectType.Fields[0].FiledType) != "integer" {
+		t.Fatalf("parser annotate object type id field is err")
+	}
+	if objectType.Fields[1].Name != "data" || annotateast.TypeConvertStr(objectType.Fields[1].FiledType) != "DataClass" {
+		t.Fatalf("parser annotate object type data field is err")
+	}
+	if objectType.Fields[2].Name != "dic" || annotateast.TypeConvertStr(objectType.Fields[2].FiledType) != "table<integer, boolean>" {
+		t.Fatalf("parser annotate object type dic field is err")
+	}
+}
+
 func TestAnnotateParserFun(t *testing.T) {
 	commentInfo := &lexer.CommentInfo{
 		LineVec: []lexer.CommentLine{
