@@ -3,6 +3,8 @@ package projects
 import (
 	"luahelper-lsp/langserver/check/annotation/annotateast"
 	"luahelper-lsp/langserver/check/common"
+	"luahelper-lsp/langserver/check/compiler/ast"
+	"luahelper-lsp/langserver/check/compiler/lexer"
 	"luahelper-lsp/langserver/check/results"
 )
 
@@ -63,4 +65,6 @@ type Projects interface {
 	IsFieldOfClass(className string, fieldName string) bool
 
 	GetVarAnnType(fileName string, lastLine int) (string, bool)
+
+	GetAnnotateClassNameByExp(strFile string, exp ast.Exp, loc lexer.Location) []string
 }

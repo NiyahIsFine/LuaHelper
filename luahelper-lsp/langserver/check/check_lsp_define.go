@@ -214,7 +214,7 @@ func (a *AllProject) findLspReferenceVarDefine(comParam *CommonFuncParam, varStr
 
 // FindReferenceVarDefine 查找引用时候变量的定义
 func (a *AllProject) FindReferenceVarDefine(strFile string, varStruct *common.DefineVarStruct) (lastDefine lexer.Location,
-	oldSymbol *common.Symbol, isWhole bool) {
+	oldSymbol *common.Symbol, isWhole bool, targetSymbol *common.Symbol) {
 	comParam := a.getVarCommonFuncParam(strFile, varStruct)
 	if comParam == nil {
 		return
@@ -228,8 +228,11 @@ func (a *AllProject) FindReferenceVarDefine(strFile string, varStruct *common.De
 
 	isWhole = true
 	if findVar == nil {
-		return lastDefine, oldSymbol, isWhole
+		return lastDefine, oldSymbol, isWhole, targetSymbol
 	}
+
+	findExpList := []common.FindExpFile{}
+	targetSymbol = a.FindVarReferSymbol(strFile, varStruct.Exp, comParam, &findExpList, 1)
 
 	lastDefine = findVar.Loc
 	oldVar := findVar
@@ -245,7 +248,7 @@ func (a *AllProject) FindReferenceVarDefine(strFile string, varStruct *common.De
 			oldVar = subVarMem
 		}
 	}
-	return lastDefine, oldSymbol, isWhole
+	return lastDefine, oldSymbol, isWhole, targetSymbol
 }
 
 // FindVarDefineInfo 客户端请求变量的定义的接口，尽量返回变量的最深处的引用定义关系

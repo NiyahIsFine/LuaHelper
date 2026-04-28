@@ -21,6 +21,16 @@ func (a *AllProject) isFieldOfClass(fieldName string, className string) bool {
 		return true
 	}
 
+	if isFieldOfClassRelateVar(fieldName, createTypeList.List[0].ClassInfo.RelateVar) {
+		return true
+	}
+
+	for _, extraVar := range createTypeList.List[0].ClassInfo.ExtraRelateVarList {
+		if isFieldOfClassRelateVar(fieldName, extraVar.Var) {
+			return true
+		}
+	}
+
 	// 所有父类型也处理下，再次递归获取
 	for _, strParent := range createTypeList.List[0].ClassInfo.ClassState.ParentNameList {
 		if a.isFieldOfClass(fieldName, strParent) {
@@ -29,6 +39,15 @@ func (a *AllProject) isFieldOfClass(fieldName string, className string) bool {
 	}
 
 	return false
+}
+
+func isFieldOfClassRelateVar(fieldName string, varInfo *common.VarInfo) bool {
+	if varInfo == nil || varInfo.SubMaps == nil {
+		return false
+	}
+
+	_, ok := varInfo.SubMaps[fieldName]
+	return ok
 }
 
 // 获取注解class

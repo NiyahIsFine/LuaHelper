@@ -15,15 +15,17 @@ type SelfConvertInterface interface {
 
 // ReferenceFileResult 第四阶段分析的单个lua文件，查找对变量的引用
 type ReferenceFileResult struct {
-	StrFile          string                 // 文件的名称
-	fileResult       *FileResult            // 单个文件分析的指针
-	fileName         string                 // 引用所在的lua文件
-	referSuffVec     []string               // 引用的后缀存放字符串数组，例如引用a.b.c, referName存放的值为a，b和c的值存放在数组中
-	findSymbol       *common.VarInfo        // 引用如果为局部信息，有值
-	secondProjectVec []*SingleProjectResult // 引用的文件所需要处理的第二阶段工程名
-	thirdStruct      *AnalysisThird         // 引用所包含的第三阶段散落的文件
-	FindLocVec       []lexer.Location       // 找到的引用关系位置
-	ignoreDefineLoc  lexer.Location         // 需要忽略的定义位置
+	StrFile           string                 // 文件的名称
+	fileResult        *FileResult            // 单个文件分析的指针
+	fileName          string                 // 引用所在的lua文件
+	referSuffVec      []string               // 引用的后缀存放字符串数组，例如引用a.b.c, referName存放的值为a，b和c的值存放在数组中
+	findSymbol        *common.VarInfo        // 引用如果为局部信息，有值
+	findAnnotateClass string                 // 查找注解class成员引用时，对应的class名称
+	findAnnotateField string                 // 查找注解class成员引用时，对应的field名称
+	secondProjectVec  []*SingleProjectResult // 引用的文件所需要处理的第二阶段工程名
+	thirdStruct       *AnalysisThird         // 引用所包含的第三阶段散落的文件
+	FindLocVec        []lexer.Location       // 找到的引用关系位置
+	ignoreDefineLoc   lexer.Location         // 需要忽略的定义位置
 }
 
 // CreateReferenceFileResult 创建单个引用的指针
@@ -35,6 +37,37 @@ func CreateReferenceFileResult(strFile string) *ReferenceFileResult {
 		referSuffVec:    []string{},
 		ignoreDefineLoc: lexer.Location{},
 	}
+}
+
+func (r *ReferenceFileResult) SetFindAnnotateField(className string, fieldName string) {
+	r.findAnnotateClass = className
+	r.findAnnotateField = fieldName
+}
+
+func (r *ReferenceFileResult) GetFindAnnotateField() (className string, fieldName string) {
+	return r.findAnnotateClass, r.findAnnotateField
+}
+
+func (r *ReferenceFileResult) MatchAnnotateField(className string, fieldName string, loc lexer.Location) bool {
+	if r.findAnnotateClass == "" || r.findAnnotateField == "" {
+		return false
+	}
+
+	if r.findAnnotateField != fieldName {
+		return false
+	}
+
+	classList := strings.Split(className, "|")
+	for _, oneClass := range classList {
+		if oneClass != r.findAnnotateClass {
+			continue
+		}
+
+		r.FindLocVec = append(r.FindLocVec, loc)
+		return true
+	}
+
+	return false
 }
 
 // MatchVarInfo 对比遍历的局部变量引用是否是自己想要的

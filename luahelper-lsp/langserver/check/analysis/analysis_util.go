@@ -243,7 +243,14 @@ func (a *Analysis) GetAnnTypeByExp(referExp ast.Exp, idx int) (retVec []string) 
 		}
 	} else {
 		if varInfo.ReferFunc != nil && isFuncCall {
-			// 如果是函数调用 且函数没有返回值注解 直接返回any类型
+			if ok, expReturn := varInfo.ReferFunc.GetReturnIndexExp(uint8(varIdx)); ok {
+				returnTypeVec := a.GetAnnTypeByExp(expReturn, -1)
+				if len(returnTypeVec) > 0 {
+					return returnTypeVec
+				}
+			}
+
+			// 如果是函数调用 且函数没有返回值注解、返回表达式也无法推导，直接返回any类型
 			retVec = append(retVec, "any")
 			return retVec
 		}

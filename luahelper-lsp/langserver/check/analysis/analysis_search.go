@@ -504,6 +504,96 @@ func (a *Analysis) checkfindGVar(strName string, loc lexer.Location, strProPre s
 	a.findGlobalVar(strName, loc, strProPre, true, gFlag, nameExp, nil)
 }
 
+func (a *Analysis) matchAnnotateClassMemberReference(varInfo *common.VarInfo, varName string, fieldName string,
+	fieldLoc lexer.Location) bool {
+	if !a.isFourTerm() || a.ReferenceResult == nil || a.Projects == nil {
+		return false
+	}
+
+	isMember, className := a.Projects.IsMemberOfAnnotateClassByVar(fieldName, varName, varInfo)
+	if isMember {
+		return a.ReferenceResult.MatchAnnotateField(className, fieldName, fieldLoc)
+	}
+
+	targetClassName, targetFieldName := a.ReferenceResult.GetFindAnnotateField()
+	if targetClassName == "" || targetFieldName != fieldName {
+		return false
+	}
+
+	className, ok := a.Projects.GetVarAnnType(varInfo.FileName, varInfo.Loc.StartLine-1)
+	if !ok {
+		return false
+	}
+
+	return a.ReferenceResult.MatchAnnotateField(className, fieldName, fieldLoc)
+}
+
+func (a *Analysis) matchAnnotateClassMemberReferenceByExp(prefixExp ast.Exp, fieldName string,
+	fieldLoc lexer.Location) bool {
+	if !a.isFourTerm() || a.ReferenceResult == nil || a.Projects == nil {
+		return false
+	}
+
+	targetClassName, targetFieldName := a.ReferenceResult.GetFindAnnotateField()
+	if targetClassName == "" || targetFieldName != fieldName {
+		return false
+	}
+
+	for _, className := range a.Projects.GetAnnotateClassNameByExp(a.curResult.Name, prefixExp, fieldLoc) {
+		if a.ReferenceResult.MatchAnnotateField(className, fieldName, fieldLoc) {
+			return true
+		}
+	}
+
+	classNameVec := a.getAnnotateClassNameByExp(prefixExp, map[*common.VarInfo]struct{}{})
+	for _, className := range classNameVec {
+		if a.ReferenceResult.MatchAnnotateField(className, fieldName, fieldLoc) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (a *Analysis) getAnnotateClassNameByExp(exp ast.Exp, visited map[*common.VarInfo]struct{}) (classNameVec []string) {
+	if exp == nil {
+		return
+	}
+
+	for _, className := range a.GetAnnTypeByExp(exp, -1) {
+		if className != "" && className != "LuaTypeRefer" && className != "any" {
+			classNameVec = append(classNameVec, className)
+		}
+	}
+	if len(classNameVec) > 0 {
+		return classNameVec
+	}
+
+	var varInfo *common.VarInfo
+	switch oneExp := exp.(type) {
+	case *ast.ParensExp:
+		return a.getAnnotateClassNameByExp(oneExp.Exp, visited)
+	case *ast.NameExp:
+		_, varInfo, _ = a.findVarDefine(oneExp.Name, oneExp.Loc)
+	case *ast.TableAccessExp:
+		preName, varName, _, preLoc, varLoc, _ := common.GetTableNameInfo(oneExp)
+		_, varInfo, _, _ = a.findVarDefineWithPre(preName, varName, preLoc, varLoc, true)
+	case *ast.FuncCallExp:
+		return classNameVec
+	}
+
+	if varInfo == nil || varInfo.ReferExp == nil {
+		return classNameVec
+	}
+
+	if _, ok := visited[varInfo]; ok {
+		return classNameVec
+	}
+	visited[varInfo] = struct{}{}
+
+	return a.getAnnotateClassNameByExp(varInfo.ReferExp, visited)
+}
+
 // 搜索指定的三层变量调用
 func (a *Analysis) findThreeLevelCall(node ast.Exp, nameExp ast.Exp) {
 	if !a.isFourTerm() {
@@ -518,6 +608,9 @@ func (a *Analysis) findThreeLevelCall(node ast.Exp, nameExp ast.Exp) {
 		return
 	}
 	keyLoc := common.GetExpLoc(nameExp)
+	if a.matchAnnotateClassMemberReferenceByExp(node, strKey, keyLoc) {
+		return
+	}
 
 	// 2）第二轮或第三轮判断table取值是否有定义
 	strTable := common.GetExpName(node)
@@ -574,6 +667,9 @@ func (a *Analysis) findThreeLevelCall(node ast.Exp, nameExp ast.Exp) {
 		if locVar, ok := scope.FindLocVar(strOne, keyLoc); ok {
 			referInfo = locVar.ReferInfo
 			if referInfo == nil {
+				if a.matchAnnotateClassMemberReference(locVar, strOne, strKey, keyLoc) {
+					return
+				}
 				a.ReferenceResult.MatchVarInfo(a, strOne, fileResult.Name, locVar, fi, strTable, nameExp, false)
 				return
 			}
@@ -582,6 +678,9 @@ func (a *Analysis) findThreeLevelCall(node ast.Exp, nameExp ast.Exp) {
 			if ok, findVar := fileResult.FindGlobalVarInfo(strOne, false, ""); ok {
 				referInfo = findVar.ReferInfo
 				if referInfo == nil {
+					if a.matchAnnotateClassMemberReference(findVar, strOne, strKey, keyLoc) {
+						return
+					}
 					a.ReferenceResult.MatchVarInfo(a, strOne, fileResult.Name, findVar, fi, strTable, nameExp, false)
 					return
 				}
@@ -853,6 +952,9 @@ func (a *Analysis) findFuncColon(prefixExp ast.Exp, nameExp ast.Exp, nodeLoc lex
 	if !a.isFourTerm() {
 		return
 	}
+	if a.matchAnnotateClassMemberReferenceByExp(prefixExp, strKey, keyLoc) {
+		return
+	}
 
 	// 3.1) 在第四轮中查找三层次的调用关系
 	// 例如 local a = import("one.lua") ，调用 a.bb.cc 其中bb为定义的table， cc为table中的字符串key值
@@ -879,6 +981,9 @@ func (a *Analysis) findFuncColon(prefixExp ast.Exp, nameExp ast.Exp, nodeLoc lex
 		referInfo = locVar.ReferInfo
 		// 第四轮查找引用的时候，判断是否为返回table的字符串key
 		if a.isFourTerm() && referInfo == nil {
+			if a.matchAnnotateClassMemberReference(locVar, strName, strKey, keyLoc) {
+				return
+			}
 			a.ReferenceResult.MatchVarInfo(a, strName, fileResult.Name, locVar, fi, strTable, nameExp, false)
 			return
 		}
@@ -894,6 +999,9 @@ func (a *Analysis) findFuncColon(prefixExp ast.Exp, nameExp ast.Exp, nodeLoc lex
 			if firstFile != nil {
 				// find self globalInfo
 				if ok, findVar := firstFile.FindGlobalVarInfo(strName, false, ""); ok {
+					if a.matchAnnotateClassMemberReference(findVar, strName, strKey, keyLoc) {
+						return
+					}
 					// 判断是否是自己所要的引用关系
 					a.ReferenceResult.MatchVarInfo(a, strName, firstFile.Name, findVar, fi, strTable, nameExp, false)
 					return
@@ -1145,6 +1253,10 @@ func (a *Analysis) findTableDefine(node *ast.TableAccessExp) {
 		return
 	}
 
+	if a.isFourTerm() && a.matchAnnotateClassMemberReferenceByExp(node.PrefixExp, strKey, keyLoc) {
+		return
+	}
+
 	// 7.1) 在第四轮中查找三层次的调用关系
 	// 例如 local a = import("one.lua") ，调用 a.bb.cc 其中bb为定义的table， cc为table中的字符串key值
 	// 或是 _G.bb.cc 其中bb为定义的全局table， cc为table中的字符串key值
@@ -1169,6 +1281,9 @@ func (a *Analysis) findTableDefine(node *ast.TableAccessExp) {
 		referInfo = locVar.ReferInfo
 		// 第四轮查找引用的时候，判断是否为返回table的字符串key
 		if a.isFourTerm() && referInfo == nil {
+			if a.matchAnnotateClassMemberReference(locVar, strName, strKey, keyLoc) {
+				return
+			}
 			a.ReferenceResult.MatchVarInfo(a, strName, fileResult.Name, locVar, fi, strTable, node.KeyExp, false)
 			return
 		}
@@ -1184,6 +1299,9 @@ func (a *Analysis) findTableDefine(node *ast.TableAccessExp) {
 			if firstFile != nil {
 				// find self globalInfo
 				if ok, oneVar := firstFile.FindGlobalVarInfo(strName, false, ""); ok {
+					if a.matchAnnotateClassMemberReference(oneVar, strName, strKey, keyLoc) {
+						return
+					}
 					// 判断是否是自己所要的引用关系
 					a.ReferenceResult.MatchVarInfo(a, strName, firstFile.Name, oneVar, fi, strName, node.KeyExp, false)
 					return

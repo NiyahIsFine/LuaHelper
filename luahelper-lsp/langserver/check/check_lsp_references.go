@@ -1,8 +1,11 @@
 package check
 
 import (
+	"fmt"
 	"luahelper-lsp/langserver/check/analysis"
+	"luahelper-lsp/langserver/check/annotation/annotateast"
 	"luahelper-lsp/langserver/check/common"
+	"luahelper-lsp/langserver/check/compiler/ast"
 	"luahelper-lsp/langserver/check/compiler/lexer"
 	"luahelper-lsp/langserver/check/results"
 	"luahelper-lsp/langserver/log"
@@ -47,9 +50,16 @@ func (a *AllProject) getFileAnalysis(strFile string) *results.FileResult {
 // FindReferences 查找引用 1111
 func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarStruct,
 	checkSrc common.CheckReferenceSrc) (findVecs []DefineStruct) {
-	lastDefine, oldInfoFlie, isWhole := a.FindReferenceVarDefine(strFile, varStruct)
+	lastDefine, oldInfoFlie, isWhole, targetSymbol := a.FindReferenceVarDefine(strFile, varStruct)
+	annotateClassName, annotateFieldName, lastDefine := a.resolveAnnotateReferenceTarget(strFile, varStruct,
+		lastDefine, oldInfoFlie, targetSymbol)
 	if oldInfoFlie == nil || oldInfoFlie.FileName == "" || oldInfoFlie.VarInfo == nil {
-		return
+		if annotateClassName == "" || annotateFieldName == "" {
+			return
+		}
+		oldInfoFlie = &common.Symbol{
+			FileName: strFile,
+		}
 	}
 
 	luaInFile := oldInfoFlie.FileName
@@ -71,7 +81,7 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 	// 引用的文件所需要处理的第二阶段工程名
 	var secondProjectVec []*results.SingleProjectResult
 	for strEntry, tempSecondProject := range a.analysisSecondMap {
-		if _, ok := tempSecondProject.AllFiles[strFile]; !ok {
+		if _, ok := tempSecondProject.AllFiles[luaInFile]; !ok {
 			continue
 		}
 
@@ -89,11 +99,15 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 
 	// 判断是否在所有文件中查找引用
 	allFileFind := false
-	if oldLocVar.IsGlobal() {
+	if oldLocVar != nil && oldLocVar.IsGlobal() {
 		allFileFind = true
 	}
 
 	if strFile != luaInFile {
+		allFileFind = true
+	}
+
+	if annotateClassName != "" && annotateFieldName != "" {
 		allFileFind = true
 	}
 
@@ -102,7 +116,7 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 		fileResult := a.getFileAnalysis(luaInFile)
 		if fileResult != nil {
 			locVar := fileResult.MainFunc.GetOneReturnVar()
-			if oldLocVar.HasSubVarInfo(locVar) {
+			if oldLocVar != nil && oldLocVar.HasSubVarInfo(locVar) {
 				allFileFind = true
 			}
 		}
@@ -124,6 +138,7 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 		}
 		analysisFour.SetFindReferenceInfo(luaInFile, oldLocVar, secondProjectVec, varStruct.StrVec, ignoreDefineLoc,
 			sendThirdStruct)
+		analysisFour.SetFindAnnotateField(annotateClassName, annotateFieldName)
 
 		a.handleFindferences(analysisFour)
 		for _, oneLoc := range analysisFour.FindLocVec {
@@ -152,7 +167,7 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 			}
 		}
 
-		if thirdStruct.AllIncludeFile[luaInFile] {
+		if thirdStruct != nil && thirdStruct.AllIncludeFile[luaInFile] {
 			for strFile := range thirdStruct.AllIncludeFile {
 				allFileMap[strFile] = struct{}{}
 			}
@@ -161,13 +176,21 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 			thirdStruct = nil
 		}
 
+		if len(allFileMap) == 0 && annotateClassName != "" && annotateFieldName != "" {
+			for strFile := range a.fileStructMap {
+				allFileMap[strFile] = struct{}{}
+			}
+		}
+
 		referenceParam := ReferenceParam{
-			analysisThird:    thirdStruct,
-			secondProjectVec: secondProjectVec,
-			findSymbol:       oldLocVar,
-			fileName:         luaInFile,
-			suffStrVec:       varStruct.StrVec,
-			ignoreDefineLoc:  ignoreDefineLoc,
+			analysisThird:     thirdStruct,
+			secondProjectVec:  secondProjectVec,
+			findSymbol:        oldLocVar,
+			fileName:          luaInFile,
+			suffStrVec:        varStruct.StrVec,
+			ignoreDefineLoc:   ignoreDefineLoc,
+			annotateClassName: annotateClassName,
+			annotateFieldName: annotateFieldName,
 		}
 
 		delete(allFileMap, luaInFile)
@@ -183,14 +206,262 @@ func (a *AllProject) FindReferences(strFile string, varStruct *common.DefineVarS
 	return findVecs
 }
 
+func (a *AllProject) resolveAnnotateReferenceTarget(strFile string, varStruct *common.DefineVarStruct,
+	lastDefine lexer.Location, oldInfoFlie *common.Symbol, targetSymbol *common.Symbol) (className string,
+	fieldName string, defineLoc lexer.Location) {
+	defineLoc = lastDefine
+	if targetSymbol != nil && targetSymbol.StrPreClassName != "" && len(varStruct.StrVec) > 0 {
+		return targetSymbol.StrPreClassName, varStruct.StrVec[len(varStruct.StrVec)-1], defineLoc
+	}
+
+	className, fieldName = a.getAnnotateFieldByLoc(strFile, lastDefine)
+	if className != "" && fieldName != "" {
+		return className, fieldName, defineLoc
+	}
+
+	if targetSymbol != nil && targetSymbol.VarInfo != nil {
+		className, fieldName = a.getAnnotateFieldByVarInfo(targetSymbol.VarInfo)
+		if className != "" && fieldName != "" {
+			return className, fieldName, defineLoc
+		}
+	}
+
+	if oldInfoFlie != nil && oldInfoFlie.VarInfo != nil && len(varStruct.StrVec) > 1 {
+		className = a.getAnnotateClassByRelateVar(oldInfoFlie.VarInfo)
+		if className != "" {
+			return className, varStruct.StrVec[len(varStruct.StrVec)-1], defineLoc
+		}
+	}
+
+	cursorLoc := lexer.Location{
+		StartLine:   varStruct.PosLine + 1,
+		StartColumn: varStruct.PosCh,
+		EndLine:     varStruct.PosLine + 1,
+		EndColumn:   varStruct.PosCh,
+	}
+	className, fieldName = a.getAnnotateFieldByLoc(strFile, cursorLoc)
+	if className != "" && fieldName != "" && !cursorLoc.IsInitialLoc() && defineLoc.IsInitialLoc() {
+		defineLoc = cursorLoc
+	}
+
+	return className, fieldName, defineLoc
+}
+
+func (a *AllProject) getAnnotateFieldByLoc(strFile string, loc lexer.Location) (className string, fieldName string) {
+	if loc.IsInitialLoc() {
+		return "", ""
+	}
+
+	for _, createTypeList := range a.createTypeMap {
+		for _, createType := range createTypeList.List {
+			classInfo := createType.ClassInfo
+			if classInfo == nil || classInfo.LuaFile != strFile || classInfo.ClassState == nil {
+				continue
+			}
+
+			for name, fieldState := range classInfo.FieldMap {
+				if lexer.CompareTwoLoc(&fieldState.NameLoc, &loc) ||
+					fieldState.NameLoc.IsInLocStruct(loc.StartLine, loc.StartColumn) {
+					return classInfo.ClassState.Name, name
+				}
+			}
+
+			if name, ok := getRelateVarFieldByLoc(classInfo.RelateVar, loc); ok {
+				return classInfo.ClassState.Name, name
+			}
+
+			for _, extraVar := range classInfo.ExtraRelateVarList {
+				if name, ok := getRelateVarFieldByLoc(extraVar.Var, loc); ok {
+					return classInfo.ClassState.Name, name
+				}
+			}
+		}
+	}
+
+	return "", ""
+}
+
+func getRelateVarFieldByLoc(varInfo *common.VarInfo, loc lexer.Location) (fieldName string, ok bool) {
+	if varInfo == nil || varInfo.SubMaps == nil {
+		return "", false
+	}
+
+	for name, subVar := range varInfo.SubMaps {
+		if subVar == nil {
+			continue
+		}
+
+		if lexer.CompareTwoLoc(&subVar.Loc, &loc) || subVar.Loc.IsInLocStruct(loc.StartLine, loc.StartColumn) {
+			return name, true
+		}
+	}
+
+	return "", false
+}
+
+func (a *AllProject) getAnnotateFieldByVarInfo(findVar *common.VarInfo) (className string, fieldName string) {
+	if findVar == nil {
+		return "", ""
+	}
+
+	for _, createTypeList := range a.createTypeMap {
+		for _, createType := range createTypeList.List {
+			classInfo := createType.ClassInfo
+			if classInfo == nil || classInfo.ClassState == nil {
+				continue
+			}
+
+			if name, ok := getRelateVarFieldByVarInfo(classInfo.RelateVar, findVar); ok {
+				return classInfo.ClassState.Name, name
+			}
+
+			for _, extraVar := range classInfo.ExtraRelateVarList {
+				if name, ok := getRelateVarFieldByVarInfo(extraVar.Var, findVar); ok {
+					return classInfo.ClassState.Name, name
+				}
+			}
+		}
+	}
+
+	return "", ""
+}
+
+func (a *AllProject) getAnnotateClassByRelateVar(findVar *common.VarInfo) (className string) {
+	if findVar == nil {
+		return ""
+	}
+
+	for _, createTypeList := range a.createTypeMap {
+		for _, createType := range createTypeList.List {
+			classInfo := createType.ClassInfo
+			if classInfo == nil || classInfo.ClassState == nil {
+				continue
+			}
+
+			if isSameVarInfo(classInfo.RelateVar, findVar) {
+				return classInfo.ClassState.Name
+			}
+
+			for _, extraVar := range classInfo.ExtraRelateVarList {
+				if isSameVarInfo(extraVar.Var, findVar) {
+					return classInfo.ClassState.Name
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+func isSameVarInfo(oneVar *common.VarInfo, twoVar *common.VarInfo) bool {
+	if oneVar == nil || twoVar == nil {
+		return false
+	}
+
+	if oneVar == twoVar {
+		return true
+	}
+
+	return oneVar.FileName == twoVar.FileName && lexer.CompareTwoLoc(&oneVar.Loc, &twoVar.Loc)
+}
+
+func getRelateVarFieldByVarInfo(varInfo *common.VarInfo, findVar *common.VarInfo) (fieldName string, ok bool) {
+	if varInfo == nil || varInfo.SubMaps == nil {
+		return "", false
+	}
+
+	for name, subVar := range varInfo.SubMaps {
+		if subVar == findVar {
+			return name, true
+		}
+
+		if subVar != nil && lexer.CompareTwoLoc(&subVar.Loc, &findVar.Loc) && subVar.FileName == findVar.FileName {
+			return name, true
+		}
+	}
+
+	return "", false
+}
+
+func (a *AllProject) GetAnnotateClassNameByExp(strFile string, exp ast.Exp, loc lexer.Location) []string {
+	comParam := a.getCommFunc(strFile, loc.StartLine, loc.StartColumn)
+	if comParam == nil {
+		return nil
+	}
+
+	visitedVar := map[*common.VarInfo]struct{}{}
+	visitedExp := map[string]struct{}{}
+	classNameMap := map[string]struct{}{}
+	var classNameVec []string
+	a.collectAnnotateClassNameByExp(strFile, exp, comParam, visitedVar, visitedExp, classNameMap, &classNameVec)
+	return classNameVec
+}
+
+func (a *AllProject) collectAnnotateClassNameByExp(strFile string, exp ast.Exp, comParam *CommonFuncParam,
+	visitedVar map[*common.VarInfo]struct{}, visitedExp map[string]struct{}, classNameMap map[string]struct{},
+	classNameVec *[]string) {
+	if exp == nil {
+		return
+	}
+	expLoc := common.GetExpLoc(exp)
+	expKey := fmt.Sprintf("%s:%d:%d:%d:%d", strFile, expLoc.StartLine, expLoc.StartColumn, expLoc.EndLine,
+		expLoc.EndColumn)
+	if _, ok := visitedExp[expKey]; ok {
+		return
+	}
+	visitedExp[expKey] = struct{}{}
+
+	findExpList := []common.FindExpFile{}
+	symbol := a.FindVarReferSymbol(strFile, exp, comParam, &findExpList, 1)
+	if symbol == nil {
+		return
+	}
+
+	addClassName := func(className string) {
+		if className == "" {
+			return
+		}
+		if _, ok := classNameMap[className]; ok {
+			return
+		}
+		classNameMap[className] = struct{}{}
+		*classNameVec = append(*classNameVec, className)
+	}
+
+	if symbol.StrPreClassName != "" {
+		addClassName(symbol.StrPreClassName)
+	}
+	if symbol.AnnotateType != nil {
+		for _, className := range annotateast.GetAllNormalStrList(symbol.AnnotateType) {
+			addClassName(className)
+		}
+	}
+	if symbol.VarInfo != nil {
+		if className := a.getAnnotateClassByRelateVar(symbol.VarInfo); className != "" {
+			addClassName(className)
+		}
+		if className, _ := a.getAnnotateFieldByVarInfo(symbol.VarInfo); className != "" {
+			addClassName(className)
+		}
+
+		if _, ok := visitedVar[symbol.VarInfo]; !ok && symbol.VarInfo.ReferExp != nil {
+			visitedVar[symbol.VarInfo] = struct{}{}
+			a.collectAnnotateClassNameByExp(symbol.FileName, symbol.VarInfo.ReferExp, comParam, visitedVar, visitedExp,
+				classNameMap, classNameVec)
+		}
+	}
+}
+
 // ReferenceParam 封装传递的结果
 type ReferenceParam struct {
-	analysisThird    *results.AnalysisThird
-	secondProjectVec []*results.SingleProjectResult
-	findSymbol       *common.VarInfo
-	fileName         string
-	suffStrVec       []string
-	ignoreDefineLoc  lexer.Location
+	analysisThird     *results.AnalysisThird
+	secondProjectVec  []*results.SingleProjectResult
+	findSymbol        *common.VarInfo
+	fileName          string
+	suffStrVec        []string
+	ignoreDefineLoc   lexer.Location
+	annotateClassName string
+	annotateFieldName string
 }
 
 // FourFileChan 第四阶段协成的检测工程的通信
@@ -215,6 +486,7 @@ func GoRoutineFourFile(ch chan FourFileChan) {
 		referParam := request.referenceParam
 		analysisFour.SetFindReferenceInfo(referParam.fileName, referParam.findSymbol, referParam.secondProjectVec,
 			referParam.suffStrVec, referParam.ignoreDefineLoc, referParam.analysisThird)
+		analysisFour.SetFindAnnotateField(referParam.annotateClassName, referParam.annotateFieldName)
 
 		request.allProject.handleFindferences(analysisFour)
 
@@ -242,7 +514,7 @@ func recvFourFile(defineVecs *[]DefineStruct, fourFileChan FourFileChan, ignoreD
 	}
 }
 
-//  多协程分析所有的文件
+// 多协程分析所有的文件
 func handleAllFilesReference(fileList []string, allProject *AllProject, referenceParam ReferenceParam,
 	defineVecs *[]DefineStruct) {
 	listLen := len(fileList)
