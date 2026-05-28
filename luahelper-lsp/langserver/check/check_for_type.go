@@ -8,7 +8,7 @@ import (
 )
 
 func (a *AllProject) isFieldOfClass(fieldName string, className string) bool {
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 ||
 		createTypeList.List[0].ClassInfo == nil ||
 		createTypeList.List[0].ClassInfo.ClassState == nil {
@@ -208,7 +208,7 @@ func (a *AllProject) GetFieldAnnotateType(strFile string, lineForGetAnnotate int
 
 func (a *AllProject) GetFieldTypeOfClass(className string, retFieldType map[string][]string) {
 
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 ||
 		createTypeList.List[0].ClassInfo == nil ||
 		createTypeList.List[0].ClassInfo.ClassState == nil {

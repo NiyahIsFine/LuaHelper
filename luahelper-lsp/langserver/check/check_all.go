@@ -39,7 +39,8 @@ type AllProject struct {
 	thirdStruct *results.AnalysisThird
 
 	// 管理所有的注释创建的type类型，key值为名称，value是这个类型的列表，允许多个存在
-	createTypeMap map[string]common.CreateTypeList
+	createTypeMap   map[string]common.CreateTypeList
+	createTypeMutex sync.RWMutex
 
 	// 代码补全cache
 	completeCache *common.CompleteCache
@@ -141,32 +142,59 @@ func (a *AllProject) HandleCheck() {
 func (a *AllProject) rebuidCreateTypeMap() {
 	time1 := time.Now()
 
-	// 清空之前的
-	a.createTypeMap = map[string]common.CreateTypeList{}
+	newCreateTypeMap := map[string]common.CreateTypeList{}
 
 	// 遍历所有文件的注释类型，整合成一个整体
 	for _, fileStruct := range a.fileStructMap {
 		for strName, createTypeList := range fileStruct.AnnotateFile.CreateTypeMap {
-			if typeList, ok := a.createTypeMap[strName]; ok {
+			if typeList, ok := newCreateTypeMap[strName]; ok {
 				typeList.List = append(typeList.List, createTypeList.List...)
-				a.createTypeMap[strName] = typeList
+				newCreateTypeMap[strName] = typeList
 			} else {
-				a.createTypeMap[strName] = createTypeList
+				newCreateTypeMap[strName] = createTypeList
 			}
 		}
 	}
 
+	a.createTypeMutex.Lock()
+	a.createTypeMap = newCreateTypeMap
+	a.buildExtraRelateVarsLocked()
+	a.createTypeMutex.Unlock()
+
 	tc := time.Since(time1)
 	ftime := tc.Milliseconds()
 	log.Debug("rebuidCreateTypeMap time:%d", ftime)
+}
 
-	// 构建跨文件的 ExtraRelateVarList
-	a.buildExtraRelateVars()
+func (a *AllProject) getCreateTypeList(strName string) (common.CreateTypeList, bool) {
+	a.createTypeMutex.RLock()
+	defer a.createTypeMutex.RUnlock()
+	createTypeList, ok := a.createTypeMap[strName]
+	return createTypeList, ok
+}
+
+func (a *AllProject) hasCreateType(strName string) bool {
+	a.createTypeMutex.RLock()
+	defer a.createTypeMutex.RUnlock()
+	_, ok := a.createTypeMap[strName]
+	return ok
+}
+
+func (a *AllProject) getCreateTypeMapSnapshot() map[string]common.CreateTypeList {
+	a.createTypeMutex.RLock()
+	defer a.createTypeMutex.RUnlock()
+
+	createTypeMap := make(map[string]common.CreateTypeList, len(a.createTypeMap))
+	for strName, typeList := range a.createTypeMap {
+		createTypeMap[strName] = typeList
+	}
+
+	return createTypeMap
 }
 
 // buildExtraRelateVars 构建跨文件的 ---@type ClassName 关联变量
 // 遍历所有文件，收集 ---@type 注解引用了其他文件中定义的 class 的变量
-func (a *AllProject) buildExtraRelateVars() {
+func (a *AllProject) buildExtraRelateVarsLocked() {
 	// 先清空所有 class 的 ExtraRelateVarList
 	for _, typeList := range a.createTypeMap {
 		for _, oneCreate := range typeList.List {

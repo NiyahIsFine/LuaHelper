@@ -252,7 +252,7 @@ func (a *AllProject) getAnnotateFieldByLoc(strFile string, loc lexer.Location) (
 		return "", ""
 	}
 
-	for _, createTypeList := range a.createTypeMap {
+	for _, createTypeList := range a.getCreateTypeMapSnapshot() {
 		for _, createType := range createTypeList.List {
 			classInfo := createType.ClassInfo
 			if classInfo == nil || classInfo.LuaFile != strFile || classInfo.ClassState == nil {
@@ -304,7 +304,7 @@ func (a *AllProject) getAnnotateFieldByVarInfo(findVar *common.VarInfo) (classNa
 		return "", ""
 	}
 
-	for _, createTypeList := range a.createTypeMap {
+	for _, createTypeList := range a.getCreateTypeMapSnapshot() {
 		for _, createType := range createTypeList.List {
 			classInfo := createType.ClassInfo
 			if classInfo == nil || classInfo.ClassState == nil {
@@ -331,7 +331,7 @@ func (a *AllProject) getAnnotateClassByRelateVar(findVar *common.VarInfo) (class
 		return ""
 	}
 
-	for _, createTypeList := range a.createTypeMap {
+	for _, createTypeList := range a.getCreateTypeMapSnapshot() {
 		for _, createType := range createTypeList.List {
 			classInfo := createType.ClassInfo
 			if classInfo == nil || classInfo.ClassState == nil {

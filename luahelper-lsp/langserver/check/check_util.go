@@ -363,7 +363,7 @@ func (a *AllProject) GetFuncReturnType(fileName string, lastLine int) (retVec []
 
 // 根据className 查找注解的class信息
 func (a *AllProject) GetAnnClassInfo(className string) *common.CreateTypeInfo {
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 {
 		return nil
 	}
@@ -455,7 +455,7 @@ func (a *AllProject) filterAnnotateTypeByKey(ClassName string, keyName string) (
 
 	strName := ClassName
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}

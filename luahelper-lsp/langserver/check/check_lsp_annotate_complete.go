@@ -238,7 +238,7 @@ func (a *AllProject) getTypeCompleteVecs(strFile, strWord string, posLine int) {
 	}
 
 	// 4) 获取所有的class或alias类型
-	for strName, typeList := range a.createTypeMap {
+	for strName, typeList := range a.getCreateTypeMapSnapshot() {
 		if _, flag := showMap[strName]; flag {
 			continue
 		}
@@ -396,7 +396,7 @@ func (a *AllProject) objectTypeComplete(astType annotateast.Type, fileName strin
 
 		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
 		if !ok {
-			createTypeList, ok = a.createTypeMap[subAst.StrName]
+			createTypeList, ok = a.getCreateTypeList(subAst.StrName)
 		}
 		if !ok {
 			return

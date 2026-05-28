@@ -334,7 +334,7 @@ func (a *AllProject) getObjectTypeClassNames(astType annotateast.Type, fileName 
 
 		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
 		if !ok {
-			createTypeList, ok = a.createTypeMap[subAst.StrName]
+			createTypeList, ok = a.getCreateTypeList(subAst.StrName)
 		}
 		if !ok {
 			return classNameVec
@@ -387,7 +387,7 @@ func (a *AllProject) getObjectTypeMemKey(astType annotateast.Type, fileName stri
 
 		createTypeList, ok := annotateFile.CreateTypeMap[subAst.StrName]
 		if !ok {
-			createTypeList, ok = a.createTypeMap[subAst.StrName]
+			createTypeList, ok = a.getCreateTypeList(subAst.StrName)
 		}
 		if !ok {
 			return nil

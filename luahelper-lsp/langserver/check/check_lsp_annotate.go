@@ -38,7 +38,7 @@ func (a *AllProject) checkOneFileType(annotateFile *common.AnnotateFile, fragemn
 			continue
 		}
 
-		if _, ok := a.createTypeMap[str]; ok {
+		if a.hasCreateType(str) {
 			continue
 		}
 
@@ -271,7 +271,7 @@ func (a *AllProject) checkAllAnnotate() {
 	}
 
 	// 2) 再次校验是否出现了重复的type
-	for str, createList := range a.createTypeMap {
+	for str, createList := range a.getCreateTypeMapSnapshot() {
 		a.checkCreateTypeListDuplicate(str, createList)
 	}
 
@@ -305,7 +305,7 @@ func (a *AllProject) IsFieldOfClass(className string, fieldName string) bool {
 		return true
 	}
 
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 {
 		return true
 	}
@@ -334,7 +334,7 @@ func (a *AllProject) GetFuncReturnTypeByClass(className string, funcName string)
 		return
 	}
 
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -407,7 +407,7 @@ func (a *AllProject) GetFuncParamTypeByClass(className string, funcName string) 
 		return
 	}
 
-	createTypeList, flag := a.createTypeMap[className]
+	createTypeList, flag := a.getCreateTypeList(className)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -597,7 +597,7 @@ func (a *AllProject) getClassTypeInfoFuncType(strName string, fileName string, l
 	}
 
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -748,7 +748,7 @@ func (a *AllProject) getClassTypeInfoList(strName string, fileName string, lastL
 	}
 
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -1292,7 +1292,7 @@ func (a *AllProject) getFuncTypeInfoList(strName string, fileName string, lastLi
 	}
 
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -1423,7 +1423,7 @@ func (a *AllProject) GetAllTableKeyType(strFile string, astType annotateast.Type
 		if ok1 {
 			typeList = createTypeList1.List
 		} else {
-			createTypeList2, ok2 := a.createTypeMap[subAst.StrName]
+			createTypeList2, ok2 := a.getCreateTypeList(subAst.StrName)
 			if ok2 {
 				typeList = createTypeList2.List
 			}
@@ -1484,7 +1484,7 @@ func (a *AllProject) GetAllTableType(strFile string, astType annotateast.Type) (
 		if ok1 {
 			typeList = createTypeList1.List
 		} else {
-			createTypeList2, ok2 := a.createTypeMap[subAst.StrName]
+			createTypeList2, ok2 := a.getCreateTypeList(subAst.StrName)
 			if ok2 {
 				typeList = createTypeList2.List
 			}
@@ -1540,7 +1540,7 @@ func (a *AllProject) GetAllArrayType(strFile string, astType annotateast.Type) (
 		if ok1 {
 			typeList = createTypeList1.List
 		} else {
-			createTypeList2, ok2 := a.createTypeMap[subAst.StrName]
+			createTypeList2, ok2 := a.getCreateTypeList(subAst.StrName)
 			if ok2 {
 				typeList = createTypeList2.List
 			}
@@ -2071,7 +2071,7 @@ func (a *AllProject) getStrNameDefineLocVec(strName string, fileName string, las
 	}
 
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -2123,7 +2123,7 @@ func (a *AllProject) getAnnotateStrTypeInfo(strName string, fileName string, las
 	}
 
 	// 2.1) 获取所有的全局信息
-	createTypeList, flag := a.createTypeMap[strName]
+	createTypeList, flag := a.getCreateTypeList(strName)
 	if !flag || len(createTypeList.List) == 0 {
 		return
 	}
@@ -2134,7 +2134,7 @@ func (a *AllProject) getAnnotateStrTypeInfo(strName string, fileName string, las
 
 // 判断注解类型的字符串是否存在
 func (a *AllProject) judgeExistAnnoteTypeStr(strName string) bool {
-	_, ok := a.createTypeMap[strName]
+	_, ok := a.getCreateTypeList(strName)
 	return ok
 }
 

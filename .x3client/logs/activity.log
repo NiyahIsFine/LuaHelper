@@ -1,0 +1,6 @@
+2026-05-28 14:52:34.781 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-28 14:52:34.787 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-28 14:52:34.784 [info] [paperhub] provider registered
+2026-05-28 14:52:34.865 [info] [updater] new release version available: 0.2.16
+2026-05-28 14:52:34.890 [info] [paperhub/catalog] loaded 3906 capability entries from disk cache
+2026-05-28 14:52:34.890 [info] [paperhub/catalog] remote catalog loaded (3906 capabilities)
