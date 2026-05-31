@@ -126,6 +126,8 @@ func parserOneState(l *annotatelexer.AnnotateLexer) annotateast.AnnotateState {
 		return parserOverloadState(l)
 	case annotatelexer.ATokenKwField:
 		return parserFieldState(l)
+	case annotatelexer.ATokenKwPrivate:
+		return parserPrivateState(l)
 	case annotatelexer.ATokenKwParam:
 		return parserParamState(l)
 	case annotatelexer.ATokenKwReturn:

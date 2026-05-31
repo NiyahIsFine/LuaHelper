@@ -76,6 +76,9 @@ func (a *AllProject) CodeComplete(strFile string, completeVar common.CompleteVar
 		return
 	}
 
+	completeVar.SelfFlag = (len(completeVar.StrVec) == 1 && completeVar.StrVec[0] == "self" && completeVar.LastEmptyFlag) ||
+		(len(completeVar.StrVec) == 2 && completeVar.StrVec[0] == "self" && !completeVar.LastEmptyFlag)
+
 	// 5)冒号 函数，self语法进行转换
 	common.ChangeSelfToVarComplete(minFunc, &completeVar)
 

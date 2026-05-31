@@ -855,6 +855,132 @@ func TestComplete3(t *testing.T) {
 	}
 }
 
+func TestCompletePrivate(t *testing.T) {
+	_, filename, _, _ := runtime.Caller(0)
+	paths, _ := filepath.Split(filename)
+
+	strRootPath := paths + "../testdata/complete"
+	strRootPath, _ = filepath.Abs(strRootPath)
+
+	strRootURI := "file://" + strRootPath
+	lspServer := createLspTest(strRootPath, strRootURI)
+	context := context.Background()
+
+	fileName := strRootPath + "/" + "test_private.lua"
+	data, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		t.Fatalf("read file:%s err=%s", fileName, err.Error())
+	}
+
+	testCompleteList := []TestCompleteInfo{
+		{
+			changeRange: lsp.Range{
+				Start: lsp.Position{Line: 25, Character: 0},
+			},
+			changText:    "privateCompleteObj.",
+			resultList:   []string{"publicField", "publicMethod"},
+			noResultList: []string{"privateField", "privateMethod"},
+		},
+		{
+			changeRange: lsp.Range{
+				Start: lsp.Position{Line: 20, Character: 0},
+			},
+			changText:    "self.",
+			resultList:   []string{"publicField", "publicMethod", "childObj", "privateField", "privateMethod"},
+			noResultList: []string{},
+		},
+		{
+			changeRange: lsp.Range{
+				Start: lsp.Position{Line: 20, Character: 0},
+			},
+			changText:    "self.childObj:",
+			resultList:   []string{"new", "publicMethod"},
+			noResultList: []string{"privateMethod"},
+		},
+	}
+
+	for index, oneComplete := range testCompleteList {
+		oneComplete.changeRange.End = oneComplete.changeRange.Start
+		oneComplete.compLoc = lsp.Position{
+			Line:      oneComplete.changeRange.Start.Line,
+			Character: oneComplete.changeRange.Start.Character + uint32(len(oneComplete.changText)),
+		}
+
+		openParams := lsp.DidOpenTextDocumentParams{
+			TextDocument: lsp.TextDocumentItem{
+				URI:  lsp.DocumentURI(fileName),
+				Text: string(data),
+			},
+		}
+		err1 := lspServer.TextDocumentDidOpen(context, openParams)
+		if err1 != nil {
+			t.Fatalf("didopen file:%s err=%s", fileName, err1.Error())
+		}
+
+		changParams := lsp.DidChangeTextDocumentParams{
+			TextDocument: lsp.VersionedTextDocumentIdentifier{
+				TextDocumentIdentifier: lsp.TextDocumentIdentifier{
+					URI: lsp.DocumentURI(fileName),
+				},
+			},
+			ContentChanges: []lsp.TextDocumentContentChangeEvent{
+				{
+					Range:       &oneComplete.changeRange,
+					RangeLength: 0,
+					Text:        oneComplete.changText,
+				},
+			},
+		}
+
+		lspServer.TextDocumentDidChange(context, changParams)
+
+		completionParams := lsp.CompletionParams{
+			TextDocumentPositionParams: lsp.TextDocumentPositionParams{
+				TextDocument: lsp.TextDocumentIdentifier{
+					URI: lsp.DocumentURI(fileName),
+				},
+				Position: oneComplete.compLoc,
+			},
+			Context: lsp.CompletionContext{
+				TriggerKind: lsp.CompletionTriggerKind(1),
+			},
+		}
+
+		completionReturn, err2 := lspServer.TextDocumentComplete(context, completionParams)
+		if err2 != nil {
+			t.Fatalf("complete file:%s err=%s", fileName, err2.Error())
+		}
+
+		completionListTmp, _ := completionReturn.(CompletionListTmp)
+
+		for _, resultStr := range oneComplete.resultList {
+			findFlag := false
+			for _, oneCompReturn := range completionListTmp.Items {
+				if resultStr == oneCompReturn.Label {
+					findFlag = true
+				}
+			}
+
+			if !findFlag {
+				t.Fatalf("not find complete index=%d, str=%s", index, resultStr)
+			}
+		}
+
+		for _, noStr := range oneComplete.noResultList {
+			findFlag := false
+			for _, oneCompReturn := range completionListTmp.Items {
+				if noStr == oneCompReturn.Label {
+					findFlag = true
+				}
+			}
+
+			if findFlag {
+				t.Fatalf("noResultList find complete index=%d, str=%s", index, noStr)
+			}
+		}
+	}
+}
+
 // # table的长度代码补全
 func TestComplete4(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)

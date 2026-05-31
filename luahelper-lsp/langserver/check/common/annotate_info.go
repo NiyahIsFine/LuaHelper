@@ -98,6 +98,11 @@ type FragementOverloadInfo struct {
 	OverloadList []*annotateast.AnnotateOverloadState
 }
 
+// FragementPrivateInfo private修饰符信息
+type FragementPrivateInfo struct {
+	PrivateList []*annotateast.AnnotatePrivateState
+}
+
 // FragementInfo 单个注释块转成的结构
 type FragementInfo struct {
 	LastLine     int   // 最后一行
@@ -110,6 +115,7 @@ type FragementInfo struct {
 	VarargInfo   *FragementVarargInfo
 	GenericInfo  *FragementGenericInfo
 	OverloadInfo *FragementOverloadInfo
+	PrivateInfo  *FragementPrivateInfo
 }
 
 // GetFirstOneClassInfo 获取注释代码段第一个ClassInfo
@@ -454,6 +460,10 @@ func (af *AnnotateFile) analysisAnnotateFragement(lastLine int, annotateFragment
 		VarargInfo: nil,
 	}
 
+	privateInfo := FragementPrivateInfo{
+		PrivateList: []*annotateast.AnnotatePrivateState{},
+	}
+
 	fragmentInfo := &FragementInfo{
 		LastLine: lastLine,
 	}
@@ -527,6 +537,9 @@ func (af *AnnotateFile) analysisAnnotateFragement(lastLine int, annotateFragment
 
 		case *annotateast.AnnotateVarargState:
 			varargInfo.VarargInfo = state
+
+		case *annotateast.AnnotatePrivateState:
+			privateInfo.PrivateList = append(privateInfo.PrivateList, state)
 		}
 	}
 
@@ -571,6 +584,11 @@ func (af *AnnotateFile) analysisAnnotateFragement(lastLine int, annotateFragment
 	// 8) 可变参数段
 	if varargInfo.VarargInfo != nil {
 		fragmentInfo.VarargInfo = &varargInfo
+	}
+
+	// 9) private修饰符段
+	if len(privateInfo.PrivateList) > 0 {
+		fragmentInfo.PrivateInfo = &privateInfo
 	}
 
 	af.FragementMap[lastLine] = fragmentInfo
@@ -686,6 +704,25 @@ func relateVarBeforeFragementNewType(varInfo *VarInfo, fragmentInfo *FragementIn
 
 			// 这个alias关联到变量，返回
 			oneAliasInfo.RelateVar = varInfo
+			return true
+		}
+	}
+
+	return false
+}
+
+func relateVarBeforeFragementPrivate(varInfo *VarInfo, fragmentInfo *FragementInfo) bool {
+	if fragmentInfo.PrivateInfo == nil || len(fragmentInfo.PrivateInfo.PrivateList) == 0 {
+		return false
+	}
+
+	varInfo.IsPrivate = true
+	return true
+}
+
+func (af *AnnotateFile) hasPrivateFragment() bool {
+	for _, fragment := range af.FragementMap {
+		if fragment.PrivateInfo != nil && len(fragment.PrivateInfo.PrivateList) > 0 {
 			return true
 		}
 	}
@@ -896,7 +933,7 @@ func (af *AnnotateFile) RelateTypeVarInfo(globalMaps map[string]*VarInfo, mainSc
 	}
 
 	// 没有需要被关联的符号
-	if needRelateNum == 0 {
+	if needRelateNum == 0 && !af.hasPrivateFragment() {
 		return
 	}
 
@@ -922,6 +959,8 @@ func (af *AnnotateFile) RelateTypeVarInfo(globalMaps map[string]*VarInfo, mainSc
 			// 前面没有任何代码段，返回
 			continue
 		}
+
+		relateVarBeforeFragementPrivate(varInfo, fragmentInfo)
 
 		if relateVarBeforeFragementNewType(varInfo, fragmentInfo) {
 			// 与前面的注释段反向关联到了

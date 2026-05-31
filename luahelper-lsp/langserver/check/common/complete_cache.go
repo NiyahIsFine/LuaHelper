@@ -58,6 +58,7 @@ type CompleteCache struct {
 	excludeMap       map[string]struct{} // 冒号语法需要排除的map
 	colonFlag        bool                // 代码补全最后是否为冒号语法
 	beforeHashtag    bool                //  补全的词前面是否包含#
+	branchThenNoEnd  bool                // else/elseif 分支补全 then 时，不需要额外补 end
 	clearParamQuotes bool                // 补全时候，是否要清除候选词的引号
 	completeVar      *CompleteVarStruct  // 缓存的输入代码补全的结构
 }
@@ -72,6 +73,7 @@ func CreateCompleteCache() *CompleteCache {
 		existMap:         map[string]int{},
 		excludeMap:       map[string]struct{}{},
 		colonFlag:        false,
+		branchThenNoEnd:  false,
 		clearParamQuotes: false,
 		completeVar:      nil,
 	}
@@ -87,6 +89,7 @@ func (cache *CompleteCache) ResertData() {
 	cache.excludeMap = make(map[string]struct{}, cache.excludeNum)
 	cache.colonFlag = false
 	cache.beforeHashtag = false
+	cache.branchThenNoEnd = false
 	cache.clearParamQuotes = false
 	cache.completeVar = nil
 }
@@ -119,6 +122,16 @@ func (cache *CompleteCache) SetBeforeHashtag(flag bool) {
 // GetBeforeHashtag set before hash tag
 func (cache *CompleteCache) GetBeforeHashtag() bool {
 	return cache.beforeHashtag
+}
+
+// SetBranchThenNoEnd set whether then snippet should skip trailing end on branch lines
+func (cache *CompleteCache) SetBranchThenNoEnd(flag bool) {
+	cache.branchThenNoEnd = flag
+}
+
+// GetBranchThenNoEnd get whether then snippet should skip trailing end on branch lines
+func (cache *CompleteCache) GetBranchThenNoEnd() bool {
+	return cache.branchThenNoEnd
 }
 
 // GetDataList 获取所有的数据
@@ -184,8 +197,24 @@ func (cache *CompleteCache) IsExcludeStr(strLabel string) bool {
 	return flag
 }
 
+func (cache *CompleteCache) isSelfComplete() bool {
+	if cache.completeVar == nil {
+		return false
+	}
+
+	return cache.completeVar.SelfFlag
+}
+
+func (cache *CompleteCache) canInsertPrivateMember() bool {
+	return cache.isSelfComplete()
+}
+
 // InsertCompleteVar 插入补全缓存类型的CKindVar
 func (cache *CompleteCache) InsertCompleteVar(luaFile string, label string, varInfo *VarInfo) {
+	if varInfo != nil && varInfo.IsPrivate && !cache.canInsertPrivateMember() {
+		return
+	}
+
 	oneComplete := OneCompleteData{
 		Label:     label,
 		LuaFile:   luaFile,
@@ -209,6 +238,10 @@ func (cache *CompleteCache) InsertCompleteVar(luaFile string, label string, varI
 // InsertCompleteVar 插入补全缓存类型的CKindVar
 // 当为VarInfo时候，是否补充第一个参数为self
 func (cache *CompleteCache) InsertCompleteVarInclude(luaFile string, label string, varInfo *VarInfo) {
+	if varInfo != nil && varInfo.IsPrivate && !cache.canInsertPrivateMember() {
+		return
+	}
+
 	oneComplete := OneCompleteData{
 		Label:     label,
 		LuaFile:   luaFile,
@@ -311,6 +344,10 @@ func (cache *CompleteCache) InsertCompleteInnotateType(label string, creatType *
 // InsertCompleteClassField 插入注解系统的class field域
 func (cache *CompleteCache) InsertCompleteClassField(luaFile, label string, field *annotateast.AnnotateFieldState,
 	colonType annotateast.FieldColonType) {
+	if field != nil && field.FieldScopeType == annotateast.FieldScopePrivate && !cache.canInsertPrivateMember() {
+		return
+	}
+
 	oneComplete := OneCompleteData{
 		Label:          label,
 		LuaFile:        luaFile,

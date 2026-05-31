@@ -4,3 +4,40 @@
 2026-05-28 14:52:34.865 [info] [updater] new release version available: 0.2.16
 2026-05-28 14:52:34.890 [info] [paperhub/catalog] loaded 3906 capability entries from disk cache
 2026-05-28 14:52:34.890 [info] [paperhub/catalog] remote catalog loaded (3906 capabilities)
+2026-05-29 16:56:43.140 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-29 16:56:43.143 [info] [paperhub] provider registered
+2026-05-29 16:56:43.147 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-29 16:56:43.158 [info] [updater] new release version available: 0.2.19
+2026-05-29 16:56:43.168 [info] [paperhub/catalog] loaded 3906 capability entries from disk cache
+2026-05-29 16:56:43.169 [info] [paperhub/catalog] remote catalog loaded (3906 capabilities)
+2026-05-29 17:36:38.469 [info] [paperhub] provider registered
+2026-05-29 17:36:38.466 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-29 17:36:38.471 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-29 17:36:38.507 [info] [paperhub/catalog] loaded 3906 capability entries from disk cache
+2026-05-29 17:36:38.507 [info] [paperhub/catalog] remote catalog loaded (3906 capabilities)
+2026-05-29 17:36:38.513 [info] [updater] new release version available: 0.2.19
+2026-05-29 17:46:47.151 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-29 17:46:47.156 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-29 17:46:47.154 [info] [paperhub] provider registered
+2026-05-29 17:46:47.173 [info] [updater] new release version available: 0.2.19
+2026-05-29 17:46:47.181 [info] [paperhub/catalog] remote catalog loaded (3915 capabilities)
+2026-05-29 17:46:47.180 [info] [paperhub/catalog] loaded 3915 capability entries from disk cache
+2026-05-29 18:39:51.820 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-29 18:39:51.823 [info] [paperhub] provider registered
+2026-05-29 18:39:51.825 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-29 18:39:51.846 [info] [paperhub/catalog] loaded 3915 capability entries from disk cache
+2026-05-29 18:39:51.847 [info] [paperhub/catalog] remote catalog loaded (3915 capabilities)
+2026-05-29 18:39:51.850 [info] [updater] new release version available: 0.2.19
+2026-05-31 21:48:52.688 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-31 21:48:52.693 [info] [paperhub] provider registered
+2026-05-31 21:48:52.696 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-31 21:48:52.759 [info] [updater] new release version available: 0.2.19
+2026-05-31 21:48:52.779 [info] [paperhub/catalog] loaded 3915 capability entries from disk cache
+2026-05-31 21:48:52.780 [info] [paperhub/catalog] remote catalog loaded (3915 capabilities)
+2026-05-31 21:53:17.066 [warn] [updater] update check failed: Canceled: Canceled
+2026-05-31 21:54:20.147 [info] [engine] ready for LuaHelper: 未找到 AICodingConfig/（已检查 12 个候选路径）
+2026-05-31 21:54:20.151 [info] [paperhub] provider registered
+2026-05-31 21:54:20.156 [info] [updater] checking http://10.10.114.104:7373/latest.json?channel=release&v=0.2.14
+2026-05-31 21:54:20.175 [info] [updater] new release version available: 0.2.19
+2026-05-31 21:54:20.186 [info] [paperhub/catalog] remote catalog loaded (3915 capabilities)
+2026-05-31 21:54:20.186 [info] [paperhub/catalog] loaded 3915 capability entries from disk cache

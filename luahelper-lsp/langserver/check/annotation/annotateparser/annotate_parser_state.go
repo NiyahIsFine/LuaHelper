@@ -207,6 +207,17 @@ func parserFieldState(l *annotatelexer.AnnotateLexer) annotateast.AnnotateState 
 	return fieldState
 }
 
+// 解析@private
+// ---@private
+func parserPrivateState(l *annotatelexer.AnnotateLexer) annotateast.AnnotateState {
+	l.NextTokenOfKind(annotatelexer.ATokenKwPrivate)
+
+	privateState := &annotateast.AnnotatePrivateState{}
+	privateState.Comment, privateState.CommentLoc = l.GetRemainComment()
+
+	return privateState
+}
+
 // 解析@param
 // ---@param [const] param_name MY_TYPE[|other_type] [@comment]
 func parserParamState(l *annotatelexer.AnnotateLexer) annotateast.AnnotateState {

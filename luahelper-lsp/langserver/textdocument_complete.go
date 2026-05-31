@@ -81,6 +81,7 @@ func (l *LspServer) TextDocumentComplete(ctx context.Context, vs lsp.CompletionP
 	if preCompStr == "" {
 		return
 	}
+	project.GetCompleteCache().SetBranchThenNoEnd(isBranchThenLine(comResult.contents, comResult.offset))
 
 	// 特殊的补全，开头为 " 或是 ' 或是 空格
 	paramCandidateType := l.getFuncParamCandidateType(ctx, vs.TextDocument.URI, vs.Position)
@@ -148,6 +149,16 @@ func getDefaultHashtag(comResult commFileRequest) common.CompleteVarStruct {
 		LastEmptyFlag: false,
 		IgnoreKeyWord: true,
 	}
+}
+
+func isBranchThenLine(contents []byte, offset int) bool {
+	strLine := strings.TrimSpace(stringutil.GetPreLineStr(offset, contents))
+	fields := strings.Fields(strLine)
+	if len(fields) == 0 {
+		return false
+	}
+
+	return fields[0] == "elseif" || fields[0] == "else"
 }
 
 // 处理注解系统的代码补全，注解系统是以---@开头的
@@ -670,6 +681,10 @@ func (l *LspServer) TextDocumentCompleteResolve(ctx context.Context, vs lsp.Comp
 		compItem.InsertText = snippetItem.InsertText
 		compItem.InsertTextFormat = lsp.SnippetTextFormat
 		strDetail = snippetItem.Detail
+		if vs.Label == "then .. end" && project.GetCompleteCache().GetBranchThenNoEnd() {
+			compItem.InsertText = "then\n\t${0:}"
+			strDetail = "then\n"
+		}
 		// 当snippet为function时，若前面有#符号，进行特殊的替换
 		if vs.Label == "function" && beforeHasTag {
 			compItem.InsertText = "function(${1:})\n\t${0:}\nend"

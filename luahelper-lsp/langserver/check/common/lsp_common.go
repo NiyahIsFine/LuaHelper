@@ -88,6 +88,7 @@ type CompleteVarStruct struct {
 	ParamCandidateType   annotateast.Type // 如果代码提示为函数的参数时，获取参数的候选词类型
 	SplitByte            byte             // 补全前面分割的字符
 	OnelyParamQuotesFlag bool             // 是否为特殊的"或’补充函数的参数
+	SelfFlag             bool             // 补全原始前缀是否为直接self成员
 }
 
 // RelateCheckInfo 相关联的告警信息

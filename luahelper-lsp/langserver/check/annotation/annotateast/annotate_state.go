@@ -58,6 +58,13 @@ type AnnotateFieldState struct {
 	CommentLoc     lexer.Location // 注释的位置信息
 }
 
+// AnnotatePrivateState private修饰符
+// ---@private
+type AnnotatePrivateState struct {
+	Comment    string         // 其他所有的注释内容
+	CommentLoc lexer.Location // 注释内容的位置信息
+}
+
 // AnnotateParamState 函数参数
 // ---@param param_name MY_TYPE[|other_type] [@comment]
 type AnnotateParamState struct {
